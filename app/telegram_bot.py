@@ -433,12 +433,14 @@ class BotFacturacion:
         if t.estado == "completado" and t.tipo == "factura":
             self.enviar_captura(chat, t, "11_resultado_final.png",
                                 "✅ <b>Factura generada.</b> Walmart la envía a tu correo (PDF y XML).")
+        elif t.estado == "completado" and t.tipo == "consulta":
+            # Si el portal no dio error, el ticket existe y ya tiene factura.
+            self.pendientes.pop(chat, None)
+            self.enviar(chat, f"✅ Este ticket ya está facturado.\nTC: <code>{_e(t.solicitud.tc)}</code>")
         elif t.estado == "completado":
-            if t.tipo == "consulta":
-                self.pendientes.pop(chat, None)  # ya está facturado: nada pendiente
             texto = _corta((t.resultado or {}).get("texto_visible", ""), 600)
             self.enviar_captura(chat, t, t.capturas[-1] if t.capturas else None,
-                                f"🔎 Resultado de la consulta:\n{_e(texto)}")
+                                f"🔎 Resultado:\n{_e(texto)}")
         elif t.estado == "cancelado":
             self.enviar(chat, f"✖ Cancelado. {_e(t.error or '')}\nNo se facturó nada.")
         else:

@@ -223,3 +223,17 @@ def test_comando_facturar_va_directo_a_uso():
         assert not any(b.endswith(":con") for b in botones(resumen))
     finally:
         main.gestor.oyentes.remove(bot)
+
+
+def test_consultar_ticket_facturado_solo_avisa(monkeypatch):
+    bot, api = nuevo_bot()
+    try:
+        ticket_leido(monkeypatch, tc="9906499999999999999999")  # el portal simulado lo encuentra
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":con"))))
+        aviso = api.buscar(lambda m, p: "ya está facturado" in texto(p))
+        assert "9906499999999999999999" in texto(aviso)
+        assert CHAT not in bot.pendientes
+    finally:
+        main.gestor.oyentes.remove(bot)
