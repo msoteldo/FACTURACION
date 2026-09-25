@@ -112,6 +112,8 @@ class InteraccionTrabajo:
             "datos": datos,
             "expira_en_s": self.gestor.ajustes.timeout_respuesta_s,
         }
+        # Queda en el historial para poder diagnosticar después (p. ej. el texto de un modal).
+        self.evento(f"Pregunta '{tipo}' #{self.t._contador_preguntas}: {texto[:500]}")
         self.t.estado = "esperando_respuesta"
         self.t.actualizado = _ahora()
         self.gestor.notificar(self.t)

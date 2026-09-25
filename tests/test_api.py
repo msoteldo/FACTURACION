@@ -61,6 +61,7 @@ def test_flujo_completo_con_confirmacion_humana():
     assert t["estado"] == "esperando_respuesta", t["error"]
     assert t["pregunta"]["tipo"] == "modal"
     assert "datos fiscales" in t["pregunta"]["texto"]
+    assert any("datos fiscales" in e["mensaje"] for e in t["eventos"])
     responder(t, "continuar")
 
     # Segunda pausa: el clic irreversible en "Facturar".
