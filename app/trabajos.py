@@ -213,6 +213,17 @@ class GestorTrabajos:
             opciones["channel"] = self.ajustes.navegador_canal
         return p.chromium.launch(**opciones)
 
+    def _ejecutar_flujo(self, t, flujo, page):
+        url = self.ajustes.walmart_url
+        if t.tipo == "inspeccion":
+            t.resultado = flujo.inspeccionar(url)
+        elif t.tipo == "consulta":
+            t.resultado = flujo.consultar(url, t.solicitud.tc)
+            page.wait_for_timeout(2000)  # dar chance a descargas tardías
+        else:
+            t.resultado = flujo.ejecutar(url, t.solicitud)
+            page.wait_for_timeout(2000)
+
     def _correr(self, t):
         ui = InteraccionTrabajo(self, t)
         with self._navegadores:
@@ -245,14 +256,13 @@ class GestorTrabajos:
                         # Si el portal abre el PDF/XML en otra pestaña, también se captura.
                         ctx.on("page", lambda p: p.on("download", guardar_descarga))
                         flujo = FlujoWalmart(page, self.datos, ui)
-                        if t.tipo == "inspeccion":
-                            t.resultado = flujo.inspeccionar(self.ajustes.walmart_url)
-                        elif t.tipo == "consulta":
-                            t.resultado = flujo.consultar(self.ajustes.walmart_url, t.solicitud.tc)
-                            page.wait_for_timeout(2000)  # dar chance a descargas tardías
-                        else:
-                            t.resultado = flujo.ejecutar(self.ajustes.walmart_url, t.solicitud)
-                            page.wait_for_timeout(2000)  # dar chance a descargas tardías
+                        try:
+                            self._ejecutar_flujo(t, flujo, page)
+                        except (FlujoCancelado, FlujoError):
+                            raise
+                        except Exception:
+                            ui.captura(page, "error_inesperado")  # para ver qué había en pantalla
+                            raise
                         t.estado = "completado"
                     finally:
                         browser.close()

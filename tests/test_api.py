@@ -173,3 +173,17 @@ def test_consulta_no_se_bloquea_por_factura_activa_del_mismo_tc():
     client.post(f"/facturas/{t['id']}/cancelar", headers=H)
     c = esperar_estado(r.json()["id"], {"completado", "error"})
     assert c["estado"] == "completado", c["error"]
+
+
+def test_error_inesperado_guarda_captura(monkeypatch):
+    from app import portal_walmart
+
+    def abrir_roto(self, url, pestana=None):
+        self.page.goto(url)
+        raise RuntimeError("falla simulada")
+
+    monkeypatch.setattr(portal_walmart.FlujoWalmart, "abrir", abrir_roto)
+    r = client.post("/diagnostico/portal", headers=H)
+    t = esperar_estado(r.json()["id"], {"error", "completado"})
+    assert t["estado"] == "error" and "falla simulada" in t["error"]
+    assert "error_inesperado.png" in t["capturas"]

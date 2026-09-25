@@ -140,13 +140,27 @@ class FlujoWalmart:
                        f"Opciones: {[o['text'] for o in ops]}")
         return None
 
-    def cerrar_popup(self):
+    def cerrar_popup(self, espera_ms=0):
+        """El aviso del portal puede aparecer un momento DESPUÉS de cargar la página, y su
+        overlay (#popup_overlay) intercepta todos los clics hasta que se acepta."""
         boton = self.page.locator("#popup_btn_accept")
-        if boton.count() and boton.first.is_visible():
-            boton.first.click()
-            esperar(self.page, 800)
+        if espera_ms:
+            try:
+                boton.first.wait_for(state="visible", timeout=espera_ms)
+            except PWTimeout:
+                pass
+        if not (boton.count() and boton.first.is_visible()):
+            return False
+        boton.first.click()
+        try:  # el overlay se desvanece con una animación
+            self.page.locator("#popup_overlay").first.wait_for(state="hidden", timeout=5000)
+        except PWTimeout:
+            pass
+        esperar(self.page, 500)
+        return True
 
     def clic(self, selector, descripcion, ms=2000):
+        self.cerrar_popup()
         boton = self.page.locator(selector)
         if not boton.count():
             self.fallar(f"No encontré el botón {descripcion} ({selector}).", "boton_no_encontrado")
@@ -215,12 +229,14 @@ class FlujoWalmart:
     def abrir(self, url, pestana="#invoice_tab_facturar"):
         self.page.goto(url, wait_until="networkidle", timeout=60000)
         esperar(self.page, 1000)
-        self.cerrar_popup()
+        self.cerrar_popup(espera_ms=6000)
         for sel in ("#obtener_factura_button", pestana):
+            self.cerrar_popup()
             loc = self.page.locator(sel)
             if loc.count() and loc.first.is_visible():
                 loc.first.click()
                 esperar(self.page, 800)
+                self.cerrar_popup(espera_ms=1500)
         self.ui.captura(self.page, "01_formulario")
 
     def pantalla_ticket(self, sol):

@@ -51,14 +51,26 @@ function render() {
   const ruta = location.pathname;
   if (ruta === "/ticket") {
     app.innerHTML = `
-      <div id="popup"><p>Aviso</p><button id="popup_btn_accept">Aceptar</button></div>
       <button id="obtener_factura_button">Obtener factura</button>
       <button id="invoice_tab_facturar">Facturar</button>
       <button id="invoice_tab_consulta">Consulta o reenvía tu factura</button>
       <input name="membershipOrRFC"><input name="postalCode">
       <input name="ticketNumber"><input name="transactionNumber">
       <button id="form_btn_accept">Continuar</button>`;
-    document.getElementById("popup_btn_accept").onclick = () => document.getElementById("popup").remove();
+    // Como en el portal real: el aviso aparece un momento DESPUÉS de cargar y su overlay
+    // cubre toda la página (intercepta los clics) hasta que se acepta; luego se desvanece.
+    if (!window.__avisoMostrado) setTimeout(() => {
+      window.__avisoMostrado = true;
+      const o = document.createElement("div");
+      o.id = "popup_overlay";
+      o.style = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000";
+      o.innerHTML = '<div style="background:#fff;margin:100px auto;width:300px"><p>Aviso</p>' +
+                    '<button id="popup_btn_accept">Aceptar</button></div>';
+      document.body.appendChild(o);
+      o.querySelector("#popup_btn_accept").onclick = () => {
+        o.style.opacity = ".5"; setTimeout(() => o.remove(), 400);
+      };
+    }, 2500);
     document.getElementById("invoice_tab_consulta").onclick = renderConsulta;
     document.getElementById("form_btn_accept").onclick = () => {
       const tc = document.querySelector("[name=ticketNumber]").value;
