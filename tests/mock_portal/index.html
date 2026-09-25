@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Portal simulado de facturación</title></head>
+<body>
+<!-- Simula los ids/names y el comportamiento SPA del portal real de Walmart
+     (solo para pruebas; no es una copia del portal). -->
+<div id="app"></div>
+<script>
+const estado = { rfc: "", captcha: false };
+const app = document.getElementById("app");
+
+function ir(ruta) { history.pushState({}, "", ruta); setTimeout(render, 300); }
+
+function modal(texto, alContinuar) {
+  const m = document.createElement("div");
+  m.setAttribute("role", "dialog");
+  m.innerHTML = `<p>${texto}</p>
+    <button id="dynamic_modal_primary_btn">Continuar</button>
+    <button id="dynamic_modal_secondary_btn">Cerrar</button>`;
+  document.body.appendChild(m);
+  m.querySelector("#dynamic_modal_primary_btn").onclick = () => { m.remove(); alContinuar(); };
+  m.querySelector("#dynamic_modal_secondary_btn").onclick = () => m.remove();
+}
+
+function render() {
+  const ruta = location.pathname;
+  if (ruta === "/ticket") {
+    app.innerHTML = `
+      <div id="popup"><p>Aviso</p><button id="popup_btn_accept">Aceptar</button></div>
+      <button id="obtener_factura_button">Obtener factura</button>
+      <button id="invoice_tab_facturar">Facturar</button>
+      <input name="membershipOrRFC"><input name="postalCode">
+      <input name="ticketNumber"><input name="transactionNumber">
+      <button id="form_btn_accept">Continuar</button>`;
+    document.getElementById("popup_btn_accept").onclick = () => document.getElementById("popup").remove();
+    document.getElementById("form_btn_accept").onclick = () => {
+      const tc = document.querySelector("[name=ticketNumber]").value;
+      if (tc.startsWith("999") && !estado.captcha) {
+        estado.captcha = true;
+        const f = document.createElement("iframe");
+        f.title = "reCAPTCHA challenge"; f.width = 300; f.height = 100;
+        document.body.appendChild(f);
+        return;
+      }
+      if (tc.startsWith("000")) { app.insertAdjacentHTML("beforeend", "<p role=alert>Ticket ya facturado</p>"); return; }
+      estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
+      ir("/address");
+    };
+  } else if (ruta === "/address") {
+    app.innerHTML = `
+      <input name="rfc" disabled value="${estado.rfc}">
+      <input name="Razón Social"><input name="Calle"><input name="Número exterior">
+      <input name="Número interior"><input name="Referencia"><input name="Estado">
+      <input name="Municipio/Delegación"><input name="Colonia"><input name="Código Postal">
+      <input name="email">
+      <select name="Régimen Fiscal"><option value="">Selecciona</option>
+        <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+        <option value="601">601 - General de Ley Personas Morales</option></select>
+      <select name="Uso Factura"><option value="">Selecciona</option></select>
+      <button id="form_btn_accept">Aceptar</button>`;
+    document.querySelector("[name='Régimen Fiscal']").onchange = () => setTimeout(() => {
+      document.querySelector("[name='Uso Factura']").innerHTML = `<option value="">Selecciona</option>
+        <option value="G01">G01 - Adquisición de mercancías</option>
+        <option value="G03">G03 - Gastos en general</option>`;
+    }, 400);
+    // Simula que el portal reescribe la razón social tal como está en el SAT.
+    document.querySelector("[name='Razón Social']").oninput = (e) => {
+      if (e.target.value.endsWith("SA DE CV")) setTimeout(() => e.target.value = e.target.value.replace("SA DE CV", "S.A. DE C.V."), 200);
+    };
+    document.getElementById("form_btn_accept").onclick = () =>
+      modal("¿Confirmas que tus datos fiscales son correctos?", () => ir("/payment"));
+  } else if (ruta === "/payment") {
+    app.innerHTML = `
+      <select><option value="">Forma de pago</option><option value="04">Tarjeta de crédito</option>
+        <option value="28">Tarjeta de débito</option><option value="05">Monedero electrónico</option></select>
+      <button id="form_btn_accept">Continuar</button>`;
+    document.getElementById("form_btn_accept").onclick = () => ir("/invoiceSelection");
+  } else if (ruta === "/invoiceSelection") {
+    app.innerHTML = `
+      <label><input type="radio" name="m" id="method_email_radio">Correo</label>
+      <label><input type="radio" name="m" id="method_pdf_radio">PDF/XML</label>
+      <input name="invoice_form_email_alt_input">
+      <button id="invoice_form_btn_submit">Facturar</button>`;
+    document.getElementById("invoice_form_btn_submit").onclick = () => {
+      window.__facturado = (window.__facturado || 0) + 1;
+      if (document.getElementById("method_pdf_radio").checked) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob(["<cfdi:Comprobante/>"], { type: "application/xml" }));
+        a.download = "factura_prueba.xml"; document.body.appendChild(a); a.click();
+      }
+      app.innerHTML = "<p>Factura generada correctamente</p>";
+    };
+  }
+}
+render();
+</script>
+</body>
+</html>

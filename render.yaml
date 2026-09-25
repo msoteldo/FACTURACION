@@ -1,0 +1,42 @@
+# Blueprint de Render: en el dashboard, New > Blueprint > selecciona este repo.
+# Los valores con `sync: false` se capturan en el dashboard (quedan como secretos),
+# nunca en este archivo.
+services:
+  - type: web
+    name: facturacion-tickets
+    runtime: docker
+    plan: free
+    healthCheckPath: /salud
+    envVars:
+      - key: API_KEY
+        generateValue: true   # Render genera una clave aleatoria; cópiala para tu frontend
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: RFC
+        sync: false
+      - key: CP
+        sync: false
+      - key: RAZON_SOCIAL
+        sync: false
+      - key: CALLE
+        sync: false
+      - key: NUM_EXT
+        sync: false
+      - key: NUM_INT
+        sync: false
+      - key: REFERENCIA
+        sync: false
+      - key: ESTADO
+        sync: false
+      - key: MUNICIPIO
+        sync: false
+      - key: COLONIA
+        sync: false
+      - key: EMAIL
+        sync: false
+      - key: REGIMEN_FISCAL_TEXTO
+        value: General de Ley Personas Morales
+      - key: ANSWER_TIMEOUT_S
+        value: "600"

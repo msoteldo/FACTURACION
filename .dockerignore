@@ -1,0 +1,8 @@
+.git
+.env
+tests
+scripts_locales
+salida
+salida_lecturas
+__pycache__
+*.pyc
