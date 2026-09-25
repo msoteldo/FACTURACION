@@ -96,6 +96,11 @@ function render() {
         return;
       }
       if (tc.startsWith("000")) { estado.error = "Ticket ya facturado"; ir("/formError"); return; }
+      if (tc.startsWith("77") && !estado.avisoRefactura) {
+        estado.avisoRefactura = true;
+        modal("Este ticket ya fue facturado. ¿Desea refacturar?", () => {});
+        return;
+      }
       estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
       estado.sinRutas = tc.startsWith("88");
       ir("/address");

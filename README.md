@@ -50,7 +50,7 @@ Tipos de pregunta que puede hacer un trabajo:
 
 | tipo | cuándo | opciones |
 |---|---|---|
-| `modal` | el portal muestra un mensaje de confirmación | `continuar`, `cerrar` |
+| `modal` | el portal muestra un mensaje **delicado** (refacturar, cancelar, error, "no coincide"...) o ilegible. Las confirmaciones rutinarias se aceptan solas y aparecen en `datos.mensajes_del_portal` de `confirmar_facturar` | `continuar`, `cerrar` |
 | `revisar_direccion` | lo que muestra el portal no coincide con los datos configurados (p. ej. razón social como la tiene el SAT) | `continuar`, `cancelar` |
 | `captcha` | aparece un captcha visible | `reintentar`, `cancelar` |
 | `confirmar_facturar` | todo listo; `datos` trae el resumen (TC, TR, uso CFDI, forma de pago) | `facturar`, `cancelar` |

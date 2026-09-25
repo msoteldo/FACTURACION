@@ -53,6 +53,12 @@ PANTALLAS = {
 # Avisos emergentes: el conocido (#popup_btn_accept) y cualquier "Aceptar" dentro del overlay.
 SEL_AVISO = "#popup_btn_accept, #popup_overlay button:has-text('Aceptar')"
 
+# Mensajes del portal que SÍ se le preguntan a un humano; los demás (confirmaciones
+# rutinarias) se aceptan solos y se muestran en la confirmación final antes de facturar.
+RE_MODAL_DELICADO = re.compile(
+    r"refactur|cancel|sustitu|ya (fue|ha sido|est[aá]|se encuentra) factur|no es posible|"
+    r"no se puede|no coincide|error|incorrect|inv[aá]lid|rechaz", re.I)
+
 USO_CFDI_BUSQUEDA = {"G01": "adquisici", "G03": "general"}
 FORMAS_PAGO = {"04": "Tarjeta de crédito", "28": "Tarjeta de débito", "05": "Monedero electrónico"}
 
@@ -105,6 +111,7 @@ class FlujoWalmart:
         self.page = page
         self.datos = datos
         self.ui = interaccion
+        self.mensajes_portal = []  # modales aceptados automáticamente
 
     # ---------------------------------------------------------------- utilidades
 
@@ -251,7 +258,9 @@ class FlujoWalmart:
             esperar(self.page, 3000)  # sin recargar: se perdería lo ya capturado en la SPA
 
     def manejar_modales(self, paso, maximo=3):
-        """Modales encadenados del portal: se muestran a un humano, que decide."""
+        """Modales encadenados del portal. Las confirmaciones rutinarias se aceptan solas
+        (quedan en eventos y en la confirmación final); solo se le pregunta a un humano si
+        el texto suena delicado (refacturar, cancelar, error...) o no se pudo leer."""
         for i in range(1, maximo + 1):
             primario = self.page.locator("#dynamic_modal_primary_btn")
             if not (primario.count() and primario.first.is_visible()):
@@ -270,8 +279,13 @@ class FlujoWalmart:
                 }"""
             )
             captura = self.ui.captura(self.page, f"{paso}_modal_{i}")
-            r = self.ui.preguntar("modal", texto or "(no se pudo leer el texto del modal)",
-                                  ["continuar", "cerrar"], captura=captura)
+            if texto and not RE_MODAL_DELICADO.search(texto):
+                self.mensajes_portal.append(texto)
+                self.ui.evento(f"Mensaje del portal aceptado automáticamente: {texto[:300]}")
+                r = "continuar"
+            else:
+                r = self.ui.preguntar("modal", texto or "(no se pudo leer el texto del modal)",
+                                      ["continuar", "cerrar"], captura=captura)
             if r == "continuar":
                 primario.first.click()
             else:
@@ -409,7 +423,7 @@ class FlujoWalmart:
             "DEFINITIVAMENTE y cada ticket solo se puede facturar una vez.",
             ["facturar", "cancelar"],
             captura=captura,
-            datos=dict(self.resumen),
+            datos={**self.resumen, "mensajes_del_portal": list(self.mensajes_portal)},
         )
         if r != "facturar":
             raise FlujoCancelado("Cancelado por el usuario antes de facturar.")

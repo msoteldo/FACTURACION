@@ -56,17 +56,13 @@ def test_valida_parametros():
 
 def test_flujo_completo_con_confirmacion_humana():
     t = nueva()
-    # Primera pausa: modal de confirmación del portal tras /address.
+    # Única pausa: el clic irreversible en "Facturar". El modal rutinario del portal
+    # ("¿Confirmas...?") se acepta solo y se muestra en los datos de la confirmación.
     t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
     assert t["estado"] == "esperando_respuesta", t["error"]
-    assert t["pregunta"]["tipo"] == "modal"
-    assert "datos fiscales" in t["pregunta"]["texto"]
-    assert any("datos fiscales" in e["mensaje"] for e in t["eventos"])
-    responder(t, "continuar")
-
-    # Segunda pausa: el clic irreversible en "Facturar".
-    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
     assert t["pregunta"]["tipo"] == "confirmar_facturar"
+    assert any("datos fiscales" in m for m in t["pregunta"]["datos"]["mensajes_del_portal"])
+    assert any("aceptado automáticamente" in e["mensaje"] for e in t["eventos"])
     assert t["facturado"] is False
     assert t["pregunta"]["datos"]["forma_pago"] == "Tarjeta de débito"
     assert "Adquisición" in t["pregunta"]["datos"]["uso_cfdi_portal"]
@@ -89,8 +85,6 @@ def test_flujo_completo_con_confirmacion_humana():
 
 def test_cancelar_antes_de_facturar_no_factura():
     t = nueva(tc="9906400000000000000001")
-    t = esperar_estado(t["id"], {"esperando_respuesta"})
-    responder(t, "continuar")
     t = esperar_estado(t["id"], {"esperando_respuesta"})
     assert t["pregunta"]["tipo"] == "confirmar_facturar"
     responder(t, "cancelar")
@@ -203,9 +197,17 @@ def test_pantallas_sin_cambio_de_url_y_aviso_en_datos_fiscales():
     t = nueva(tc="8806455555555555555555")
     t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
     assert t["estado"] == "esperando_respuesta", t["error"]
-    assert t["pregunta"]["tipo"] == "modal"
-    responder(t, "continuar")
-    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
     assert t["pregunta"]["tipo"] == "confirmar_facturar", t["error"]
     responder(t, "cancelar")
     assert esperar_estado(t["id"], {"cancelado", "error"})["estado"] == "cancelado"
+
+
+def test_modal_delicado_si_se_pregunta():
+    # TC 77...: el portal pregunta si se quiere refacturar; eso lo decide un humano.
+    t = nueva(tc="7706466666666666666666")
+    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
+    assert t["pregunta"]["tipo"] == "modal", t["error"]
+    assert "refacturar" in t["pregunta"]["texto"]
+    responder(t, "cerrar")
+    t = esperar_estado(t["id"], {"cancelado", "error", "completado"})
+    assert t["facturado"] is False
