@@ -113,7 +113,15 @@ def test_error_del_portal_incluye_texto_visible():
     t = nueva(tc="0000000000000000000001")
     t = esperar_estado(t["id"], {"error", "esperando_respuesta"})
     assert t["estado"] == "error"
-    assert "Ticket ya facturado" in t["error"]
+    assert t["error"] == "El portal respondió: Ticket ya facturado"
+    assert "03_error_portal.png" in t["capturas"]
+
+
+def test_consulta_no_encontrada_es_error_con_mensaje_del_portal():
+    r = client.post("/consultas", headers=H, json={"numero": "0000000000000000000002"})
+    t = esperar_estado(r.json()["id"], {"error", "completado"})
+    assert t["estado"] == "error"
+    assert t["error"] == "El portal respondió: El ticket no se encuentra facturado o no existe"
 
 
 def test_tc_duplicado_activo_se_rechaza():

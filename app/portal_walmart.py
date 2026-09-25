@@ -178,6 +178,24 @@ class FlujoWalmart:
         texto = self.texto_visible()
         raise FlujoError(f"{mensaje}\nTexto visible en el portal:\n{texto}" if texto else mensaje)
 
+    def revisar_error_portal(self, captura):
+        """Cuando el portal rechaza algo, navega a /formError con un mensaje y un botón
+        #error_btn_accept. Se reporta como error con el mensaje literal del portal."""
+        if "/formerror" not in self.page.url.lower():
+            return
+        mensaje = ""
+        boton = self.page.locator("#error_btn_accept")
+        if boton.count():
+            mensaje = boton.first.evaluate(
+                """e => {
+                    let c = e.parentElement;
+                    for (let i = 0; i < 4 && c && !(c.innerText || '').replace(e.innerText, '').trim(); i++)
+                        c = c.parentElement;
+                    return c ? c.innerText.replace(e.innerText, '').trim() : '';
+                }""")
+        self.ui.captura(self.page, captura)
+        raise FlujoError(f"El portal respondió: {mensaje or self.texto_visible(500)}")
+
     def hay_captcha(self):
         # Solo cuenta un captcha *visible*: el badge invisible de reCAPTCHA v3 que muchos
         # sitios cargan siempre no requiere a un humano.
@@ -252,6 +270,7 @@ class FlujoWalmart:
             self.revisar_captcha("ticket_enviado")
             self.clic("#form_btn_accept", "'Continuar' de /ticket")
         self.manejar_modales("03_ticket")
+        self.revisar_error_portal("03_error_portal")
         if "/address" not in self.page.url:
             self.fallar("El portal no avanzó a /address (¿TC/TR incorrectos o ticket ya facturado? "
                         "Si ya está facturado, usa POST /consultas para recuperar la factura).",
@@ -402,6 +421,7 @@ class FlujoWalmart:
             self.clic("#form_btn_accept", "'Continuar' de la consulta", 3000)
         self.manejar_modales("03_consulta")
         esperar(self.page, 1500)
+        self.revisar_error_portal("04_consulta_error")
         self.ui.captura(self.page, "04_consulta_resultado")
 
         # Descargas: solo botones/ligas visibles cuyo texto o id hable de descargar/PDF/XML.

@@ -36,7 +36,7 @@ function renderConsulta() {
     <button id="form_btn_accept">Continuar</button>`;
   document.getElementById("form_btn_accept").onclick = () => {
     const n = document.querySelector("[name=numeroDeTicketoFactura]").value;
-    if (n.startsWith("000")) { app.insertAdjacentHTML("beforeend", "<p role=alert>No se encontró la factura</p>"); return; }
+    if (n.startsWith("000")) { estado.error = "El ticket no se encuentra facturado o no existe"; ir("/formError"); return; }
     app.innerHTML = `<p>Factura encontrada: folio ABC123</p>
       <button id="btn_xml">Descargar XML</button>
       <button id="btn_pdf">Descargar PDF</button>
@@ -49,6 +49,11 @@ function renderConsulta() {
 
 function render() {
   const ruta = location.pathname;
+  if (ruta === "/formError") {  // así responde el portal real a un ticket no válido
+    app.innerHTML = `<div id="error_container"><p>${estado.error}</p>
+      <button id="error_btn_accept" type="submit">Aceptar</button></div>`;
+    return;
+  }
   if (ruta === "/ticket") {
     app.innerHTML = `
       <button id="obtener_factura_button">Obtener factura</button>
@@ -81,7 +86,7 @@ function render() {
         document.body.appendChild(f);
         return;
       }
-      if (tc.startsWith("000")) { app.insertAdjacentHTML("beforeend", "<p role=alert>Ticket ya facturado</p>"); return; }
+      if (tc.startsWith("000")) { estado.error = "Ticket ya facturado"; ir("/formError"); return; }
       estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
       ir("/address");
     };
