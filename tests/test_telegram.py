@@ -84,7 +84,10 @@ def test_flujo_foto_a_factura(monkeypatch):
         bot.procesar(foto())
         resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
         assert TC in texto(resumen) and "Débito" in texto(resumen)
-        uso_g01 = next(b for b in botones(resumen) if b.endswith(":G01"))
+        assert "¿Qué quieres hacer?" in texto(resumen)
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
+        uso_g01 = next(b for b in botones(usos) if b.endswith(":G01"))
 
         # Forma de pago leída del ticket: con elegir G01 ya arranca.
         bot.procesar(boton(uso_g01))
@@ -107,7 +110,9 @@ def test_pide_forma_de_pago_si_no_se_leyo_y_se_puede_cancelar(monkeypatch):
         ticket_leido(monkeypatch, forma=None, tc="9906488888888888888888")
         bot.procesar(foto())
         resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
-        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":G03"))))
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
+        bot.procesar(boton(next(b for b in botones(usos) if b.endswith(":G03"))))
         formas = api.buscar(lambda m, p: "¿Con qué se pagó?" in texto(p))
         bot.procesar(boton(next(b for b in botones(formas) if b.endswith(":04"))))
         pregunta = api.buscar(lambda m, p: "¿Facturar?" in texto(p))
@@ -189,3 +194,32 @@ def test_registro_del_webhook():
     assert params["url"] == "https://ejemplo.onrender.com/telegram/webhook"
     # Secreto en formato que Telegram acepta aunque el configurado traiga "+/=".
     assert params["secret_token"] == bot.secreto and bot.secreto.isalnum() and len(bot.secreto) == 64
+
+
+def test_consultar_no_facturado_y_facturarlo_desde_el_aviso(monkeypatch):
+    bot, api = nuevo_bot()
+    try:
+        # En el portal simulado, un número que empieza con 000 "no se encuentra facturado".
+        ticket_leido(monkeypatch, tc="0000000000000000000009")
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":con"))))
+        aviso = api.buscar(lambda m, p: "aún no está facturado" in texto(p))
+        assert "no se encuentra facturado" in texto(aviso)
+        bot.procesar(boton(next(b for b in botones(aviso) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
+        assert any(b.endswith(":G01") for b in botones(usos))
+    finally:
+        main.gestor.oyentes.remove(bot)
+
+
+def test_comando_facturar_va_directo_a_uso():
+    bot, api = nuevo_bot()
+    try:
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/facturar 9906412341234123412341 03388"}})
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        assert "¿Para qué es la compra?" in texto(resumen)
+        assert not any(b.endswith(":con") for b in botones(resumen))
+    finally:
+        main.gestor.oyentes.remove(bot)

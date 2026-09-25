@@ -106,8 +106,9 @@ necesita otro servidor: cada mensaje despierta al servicio si estaba dormido.
 4. Pon ese id en `TELEGRAM_ALLOWED_CHAT_IDS` (varios, separados por coma) y guarda.
 5. Manda la foto de un ticket.
 
-Uso: foto → botones **G01 / G03** → (forma de pago si no se leyó) → captura con
-**✅ Facturar / ✖ Cancelar** → aviso final. Comandos: `/tc`, `/tr` (corregir lo leído),
+Uso: foto → **🧾 Facturar** o **🔎 Consultar factura** → (para facturar) **G01 / G03** →
+(forma de pago si no se leyó) → captura con **✅ Facturar / ✖ Cancelar** → aviso final.
+Si la consulta dice que el ticket no está facturado, el aviso trae **🧾 Facturarlo**. Comandos: `/tc`, `/tr` (corregir lo leído),
 `/facturar TC TR`, `/consultar TC`, `/estado`, `/cancelar`, `/ayuda`.
 
 Si el bot no responde: `POST /telegram/configurar` (con tu API key) vuelve a registrar el

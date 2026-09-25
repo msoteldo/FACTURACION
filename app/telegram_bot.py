@@ -2,9 +2,10 @@
 
 Flujo:
   1. Mandas la foto del ticket  -> el bot lee TC, TR, total y forma de pago (Gemini).
-  2. Tocas G01 o G03            -> si la forma de pago no se leyó, la pregunta.
-  3. El portal se llena solo    -> te llega la captura con [Facturar] [Cancelar].
-  4. Te avisa el resultado (la factura llega a tu correo).
+  2. Eliges Facturar o Consultar (si la consulta dice que no está facturado, ofrece facturarlo).
+  3. Para facturar, tocas G01 o G03 -> si la forma de pago no se leyó, la pregunta.
+  4. El portal se llena solo    -> te llega la captura con [Facturar] [Cancelar].
+  5. Te avisa el resultado (la factura llega a tu correo).
 
 Comandos: /tc, /tr (corregir), /facturar TC TR (sin foto), /consultar TC, /cancelar, /estado.
 
@@ -167,7 +168,8 @@ class BotFacturacion:
             if len(partes) != 2:
                 return self.enviar(chat, "Uso: <code>/facturar TC TR</code>")
             return self._nuevo_pendiente(chat, {"tc_numero_ticket": partes[0],
-                                                "tr_numero_transaccion": partes[1]})
+                                                "tr_numero_transaccion": partes[1]},
+                                         accion="facturar")
         if comando == "/consultar":
             return self._consultar(chat, args.strip())
         if comando == "/cancelar":
@@ -201,8 +203,9 @@ class BotFacturacion:
             return self.enviar(chat, f"❌ No pude leer el ticket: {_e(e.mensaje)}")
         self._nuevo_pendiente(chat, ticket)
 
-    def _nuevo_pendiente(self, chat, ticket):
+    def _nuevo_pendiente(self, chat, ticket, accion=None):
         p = {
+            "accion": accion,  # None = preguntar si facturar o consultar
             "id": next(self._ids),
             "tc": re.sub(r"\s", "", str(ticket.get("tc_numero_ticket") or "")),
             "tr": re.sub(r"\s", "", str(ticket.get("tr_numero_transaccion") or "")),
@@ -229,13 +232,27 @@ class BotFacturacion:
         if t.get("requiere_revision"):
             lineas.append("\nRevisa TC y TR contra el papel. Corrige con <code>/tc 123…</code> o "
                           "<code>/tr 123…</code>.")
-        lineas.append("\n¿Para qué es la compra?")
+        if p.get("accion") == "facturar":
+            lineas.append("\n¿Para qué es la compra?")
+            return self.enviar(chat, "\n".join(lineas), self._teclado_uso(p))
+        lineas.append("\n¿Qué quieres hacer?")
         pid = p["id"]
         self.enviar(chat, "\n".join(lineas), _teclado([
+            [("🧾 Facturar", f"a:{pid}:fac"), ("🔎 Consultar factura", f"a:{pid}:con")],
+            [("🗑 Descartar", f"x:{pid}")],
+        ]))
+
+    def _teclado_uso(self, p):
+        pid = p["id"]
+        return _teclado([
             [(USOS["G01"], f"u:{pid}:G01")],
             [(USOS["G03"], f"u:{pid}:G03")],
             [("💳 Cambiar forma de pago", f"fp:{pid}"), ("🗑 Descartar", f"x:{pid}")],
-        ]))
+        ])
+
+    def _pedir_uso(self, chat, p):
+        p["accion"] = "facturar"
+        self.enviar(chat, "¿Para qué es la compra?", self._teclado_uso(p))
 
     def _corregir(self, chat, campo, valor):
         p = self.pendientes.get(chat)
@@ -307,6 +324,13 @@ class BotFacturacion:
         if tipo == "x":
             self.pendientes.pop(chat, None)
             self.enviar(chat, "🗑 Ticket descartado.")
+        elif tipo == "a" and valor == "fac":
+            self._pedir_uso(chat, p)
+        elif tipo == "a" and valor == "con":
+            if not p["tc"]:
+                return "No se leyó el TC; corrígelo con /tc."
+            # El ticket queda pendiente: si resulta no facturado, se ofrece facturarlo.
+            self._consultar(chat, p["tc"])
         elif tipo == "fp":
             self._pedir_forma(chat, p)
         elif tipo == "u" and valor in USOS:
@@ -320,8 +344,7 @@ class BotFacturacion:
             if p.get("uso_cfdi"):
                 self._lanzar(chat, p)
             else:
-                p["id"] = next(self._ids)
-                self._mostrar_pendiente(chat, p)
+                self._pedir_uso(chat, p)
         else:
             return "Opción no válida."
         return None
@@ -411,6 +434,8 @@ class BotFacturacion:
             self.enviar_captura(chat, t, "11_resultado_final.png",
                                 "✅ <b>Factura generada.</b> Walmart la envía a tu correo (PDF y XML).")
         elif t.estado == "completado":
+            if t.tipo == "consulta":
+                self.pendientes.pop(chat, None)  # ya está facturado: nada pendiente
             texto = _corta((t.resultado or {}).get("texto_visible", ""), 600)
             self.enviar_captura(chat, t, t.capturas[-1] if t.capturas else None,
                                 f"🔎 Resultado de la consulta:\n{_e(texto)}")
@@ -418,8 +443,15 @@ class BotFacturacion:
             self.enviar(chat, f"✖ Cancelado. {_e(t.error or '')}\nNo se facturó nada.")
         else:
             extra = "\n⚠️ Ya se había dado clic en Facturar: revisa tu correo." if t.facturado else ""
+            teclado = None
+            p = self.pendientes.get(chat)
+            if (t.tipo == "consulta" and p and p["tc"] == t.solicitud.tc
+                    and "no se encuentra facturado" in (t.error or "").lower()):
+                extra += "\n\nEste ticket aún no está facturado."
+                teclado = _teclado([[("🧾 Facturarlo", f"a:{p['id']}:fac"),
+                                     ("🗑 Descartar", f"x:{p['id']}")]])
             self.enviar_captura(chat, t, t.capturas[-1] if t.capturas else None,
-                                f"❌ <b>Error</b>: {_e(_corta(t.error or '', 700))}{extra}")
+                                f"❌ <b>Error</b>: {_e(_corta(t.error or '', 700))}{extra}", teclado)
 
     # ------------------------------------------------------------------ webhook
 
@@ -433,7 +465,7 @@ class BotFacturacion:
 
 
 AYUDA = """<b>Facturación de tickets</b>
-📷 Mándame la <b>foto del ticket</b> y sigue los botones.
+📷 Mándame la <b>foto del ticket</b> y elige <b>Facturar</b> o <b>Consultar factura</b>.
 
 /tc 123… — corregir el TC leído
 /tr 123… — corregir el TR leído
