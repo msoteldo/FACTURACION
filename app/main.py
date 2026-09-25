@@ -44,7 +44,9 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def requiere_api_key(clave: Optional[str] = Security(api_key_header)):
     if not ajustes.api_key:
         raise HTTPException(503, "El servidor no tiene API_KEY configurada; se rechazan todas las solicitudes.")
-    if not clave or not secrets.compare_digest(clave, ajustes.api_key):
+    # Tolera espacios o comillas que se cuelan al copiar y pegar la clave.
+    clave = (clave or "").strip().strip("\"'")
+    if not clave or not secrets.compare_digest(clave.encode(), ajustes.api_key.encode()):
         raise HTTPException(401, "X-API-Key inválida o ausente.")
 
 
