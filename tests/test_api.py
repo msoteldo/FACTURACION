@@ -160,3 +160,16 @@ def test_consulta_descarga_y_no_reenvia():
 
 def test_consulta_valida_numero():
     assert client.post("/consultas", headers=H, json={"numero": "abc 123;"}).status_code == 422
+
+
+def test_consulta_no_se_bloquea_por_factura_activa_del_mismo_tc():
+    tc = "9906444444444444444444"
+    t = nueva(tc=tc)
+    esperar_estado(t["id"], {"esperando_respuesta"})
+    r = client.post("/consultas", headers=H, json={"numero": tc})
+    assert r.status_code == 202, r.text
+    # Otra consulta del mismo TC mientras la primera sigue activa sí se rechaza.
+    assert client.post("/consultas", headers=H, json={"numero": tc}).status_code == 409
+    client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+    c = esperar_estado(r.json()["id"], {"completado", "error"})
+    assert c["estado"] == "completado", c["error"]

@@ -144,9 +144,14 @@ class GestorTrabajos:
         with self._lock:
             if solicitud is not None:
                 for t in self.trabajos.values():
-                    if (t.estado in ACTIVOS and t.solicitud is not None
+                    # Solo se bloquea el mismo tipo: una consulta no debe esperar a que
+                    # termine (o expire) un intento de facturar el mismo ticket.
+                    if (t.tipo == tipo and t.estado in ACTIVOS and t.solicitud is not None
                             and t.solicitud.tc == solicitud.tc):
-                        raise ValueError(f"Ya hay un trabajo activo para ese TC: {t.id}")
+                        raise ValueError(
+                            f"Ya hay un trabajo de tipo '{tipo}' activo para ese TC: {t.id} "
+                            f"(estado: {t.estado}). Revísalo con GET /facturas/{t.id} "
+                            f"o cancélalo con POST /facturas/{t.id}/cancelar.")
             t = Trabajo(tipo, solicitud, self.ajustes.dir_trabajos)
             self.trabajos[t.id] = t
         threading.Thread(target=self._correr, args=(t,), daemon=True, name=f"trabajo-{t.id}").start()
