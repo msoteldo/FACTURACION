@@ -35,7 +35,7 @@ def _ahora():
 class Trabajo:
     def __init__(self, tipo, solicitud, directorio):
         self.id = uuid.uuid4().hex[:12]
-        self.tipo = tipo                  # "factura" | "inspeccion"
+        self.tipo = tipo                  # "factura" | "consulta" | "inspeccion"
         self.solicitud = solicitud
         self.dir = directorio / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -232,13 +232,19 @@ class GestorTrabajos:
                         def guardar_descarga(d):
                             nombre = re.sub(r"[^\w.-]", "_", d.suggested_filename)
                             d.save_as(str(t.dir / nombre))
-                            t.archivos.append(nombre)
+                            if nombre not in t.archivos:
+                                t.archivos.append(nombre)
                             ui.evento(f"Descarga guardada: {nombre}")
 
                         page.on("download", guardar_descarga)
+                        # Si el portal abre el PDF/XML en otra pestaña, también se captura.
+                        ctx.on("page", lambda p: p.on("download", guardar_descarga))
                         flujo = FlujoWalmart(page, self.datos, ui)
                         if t.tipo == "inspeccion":
                             t.resultado = flujo.inspeccionar(self.ajustes.walmart_url)
+                        elif t.tipo == "consulta":
+                            t.resultado = flujo.consultar(self.ajustes.walmart_url, t.solicitud.tc)
+                            page.wait_for_timeout(2000)  # dar chance a descargas tardías
                         else:
                             t.resultado = flujo.ejecutar(self.ajustes.walmart_url, t.solicitud)
                             page.wait_for_timeout(2000)  # dar chance a descargas tardías

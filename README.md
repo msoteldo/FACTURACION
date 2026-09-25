@@ -41,6 +41,7 @@ Swagger UI (botón **Authorize**), que sirve como frontend provisional.
 | POST | `/facturas/{id}/respuesta` | `{"pregunta_id": n, "respuesta": "<una de las opciones>"}` |
 | POST | `/facturas/{id}/cancelar` | cancela (solo antes del clic en Facturar) |
 | GET | `/facturas/{id}/archivos/{nombre}` | descarga XML/PDF o capturas `.png` |
+| POST | `/consultas` | `{"numero": "<TC# o folio>"}`: busca un ticket **ya facturado** en "Consulta o reenvía tu factura" y descarga el XML/PDF. No factura ni reenvía nada; el avance se ve con `GET /facturas/{id}` |
 | POST | `/diagnostico/portal` | abre el portal en headless y lista campos (equivale a `--inspect`) |
 
 Estados de un trabajo: `en_cola` -> `ejecutando` <-> `esperando_respuesta` -> `completado` | `cancelado` | `error`.

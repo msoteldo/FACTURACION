@@ -8,6 +8,8 @@ Flujo típico desde un frontend (web, bot de Telegram, etc.):
                                    o la confirmación final "facturar")
   5. GET  /facturas/{id}/archivos/{nombre}  bajar XML/PDF o capturas de pantalla
 
+Para un ticket ya facturado: POST /consultas y luego los pasos 3 y 5.
+
 Todas las rutas (salvo /salud) requieren el header X-API-Key.
 """
 import logging
@@ -22,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import extraccion
 from .config import Ajustes, DatosFiscales
-from .portal_walmart import SolicitudFactura
+from .portal_walmart import SolicitudConsulta, SolicitudFactura
 from .trabajos import GestorTrabajos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -65,6 +67,11 @@ class NuevaFactura(BaseModel):
         ..., description="04 = Tarjeta de crédito, 28 = Tarjeta de débito, 05 = Monedero electrónico")
     metodo_entrega: Literal["email", "descarga"] = "descarga"
     correo_alterno: Optional[EmailStr] = None
+
+
+class NuevaConsulta(BaseModel):
+    numero: str = Field(..., pattern=r"^[A-Za-z0-9-]{1,40}$",
+                        description="Número de ticket (TC#) o folio de la factura")
 
 
 class Respuesta(BaseModel):
@@ -120,6 +127,18 @@ def crear_factura(body: NuevaFactura):
     )
     try:
         t = gestor.crear("factura", solicitud)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return t.a_dict()
+
+
+@app.post("/consultas", status_code=202, dependencies=protegido)
+def crear_consulta(body: NuevaConsulta):
+    """Busca un ticket YA facturado en "Consulta o reenvía tu factura" y descarga el
+    XML/PDF si el portal lo ofrece. No factura ni reenvía nada. El avance y los archivos
+    se ven igual que una factura: GET /facturas/{id}."""
+    try:
+        t = gestor.crear("consulta", SolicitudConsulta(tc=body.numero))
     except ValueError as e:
         raise HTTPException(409, str(e))
     return t.a_dict()

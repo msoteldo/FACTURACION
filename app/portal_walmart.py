@@ -6,6 +6,7 @@ requiere a un humano (modales del portal, captchas y el clic final en "Facturar"
 se delega a un objeto `Interaccion`, que en el servidor pausa el trabajo hasta que
 alguien responda por la API.
 """
+import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Optional
@@ -35,6 +36,11 @@ CAMPOS_DIRECCION = {
     "email": "email",
 }
 
+# Pestaña "Consulta o reenvía tu factura".
+CAMPO_CONSULTA = "numeroDeTicketoFactura"
+RE_DESCARGA = re.compile(r"descarg|download|\bpdf\b|\bxml\b", re.I)
+RE_NO_TOCAR = re.compile(r"reenv|enviar|correo|e-?mail|cancel|elimin|borrar|refactur", re.I)
+
 USO_CFDI_BUSQUEDA = {"G01": "adquisici", "G03": "general"}
 FORMAS_PAGO = {"04": "Tarjeta de crédito", "28": "Tarjeta de débito", "05": "Monedero electrónico"}
 
@@ -51,6 +57,11 @@ class FlujoCancelado(Exception):
 
 class FlujoError(Exception):
     """El portal no se comportó como se esperaba."""
+
+
+@dataclass
+class SolicitudConsulta:
+    tc: str                  # número de ticket (TC#) o folio de la factura
 
 
 @dataclass
@@ -201,11 +212,11 @@ class FlujoWalmart:
 
     # ---------------------------------------------------------------- pantallas
 
-    def abrir(self, url):
+    def abrir(self, url, pestana="#invoice_tab_facturar"):
         self.page.goto(url, wait_until="networkidle", timeout=60000)
         esperar(self.page, 1000)
         self.cerrar_popup()
-        for sel in ("#obtener_factura_button", "#invoice_tab_facturar"):
+        for sel in ("#obtener_factura_button", pestana):
             loc = self.page.locator(sel)
             if loc.count() and loc.first.is_visible():
                 loc.first.click()
@@ -226,7 +237,8 @@ class FlujoWalmart:
             self.clic("#form_btn_accept", "'Continuar' de /ticket")
         self.manejar_modales("03_ticket")
         if "/address" not in self.page.url:
-            self.fallar("El portal no avanzó a /address (¿TC/TR incorrectos o ticket ya facturado?).",
+            self.fallar("El portal no avanzó a /address (¿TC/TR incorrectos o ticket ya facturado? "
+                        "Si ya está facturado, usa POST /consultas para recuperar la factura).",
                         "03_no_avanzo")
 
     def pantalla_direccion(self, sol):
@@ -350,15 +362,68 @@ class FlujoWalmart:
         self.pantalla_entrega(sol)
         return {"texto_final": self.texto_visible(800)}
 
+    def listar_elementos(self, selector="input, select, textarea, button"):
+        return self.page.eval_on_selector_all(
+            selector,
+            """els => els.map(e => ({tag: e.tagName, type: e.type || '', name: e.name || '',
+                                    id: e.id || '', visible: !!(e.offsetWidth || e.offsetHeight),
+                                    texto: ['BUTTON', 'A'].includes(e.tagName)
+                                           ? (e.innerText || '').trim().slice(0, 40) : ''}))""",
+        )
+
+    def consultar(self, url, numero):
+        """Pestaña "Consulta o reenvía tu factura": busca un ticket ya facturado y descarga
+        lo que el portal ofrezca descargar. Es de solo lectura: nunca da clic en opciones
+        de reenvío por correo ni en nada que no parezca una descarga."""
+        self.abrir(url, pestana="#invoice_tab_consulta")
+        if not self.llenar_por_name(CAMPO_CONSULTA, numero, "Número de ticket o factura"):
+            self.fallar("No encontré el campo de consulta (¿cambió el portal?).", "02_consulta_error")
+        self.ui.captura(self.page, "02_consulta_llenada")
+        self.revisar_captcha("consulta")
+        self.clic("#form_btn_accept", "'Continuar' de la consulta", 3000)
+        if self.hay_captcha():
+            self.revisar_captcha("consulta_enviada")
+            self.clic("#form_btn_accept", "'Continuar' de la consulta", 3000)
+        self.manejar_modales("03_consulta")
+        esperar(self.page, 1500)
+        self.ui.captura(self.page, "04_consulta_resultado")
+
+        # Descargas: solo botones/ligas visibles cuyo texto o id hable de descargar/PDF/XML.
+        descargas = []
+        candidatos = self.page.locator("button, a")
+        for i in range(min(candidatos.count(), 60)):
+            el = candidatos.nth(i)
+            try:
+                if not el.is_visible():
+                    continue
+                etiqueta = " ".join(filter(None, [
+                    el.inner_text(timeout=1000).strip(), el.get_attribute("id") or "",
+                    el.get_attribute("name") or "", el.get_attribute("title") or ""]))
+            except Exception:
+                continue
+            if RE_DESCARGA.search(etiqueta) and not RE_NO_TOCAR.search(etiqueta):
+                el.click()
+                descargas.append(etiqueta[:60])
+                esperar(self.page, 2500)
+        if descargas:
+            self.ui.evento(f"Se dio clic en: {descargas}")
+            self.ui.captura(self.page, "05_consulta_despues_de_descargar")
+        else:
+            self.ui.evento("No encontré botones de descarga; revisa la captura y 'elementos'.")
+
+        return {
+            "url": self.page.url,
+            "descargas_intentadas": descargas,
+            "texto_visible": self.texto_visible(1500),
+            # Para ir afinando el flujo con la pantalla real de resultados.
+            "elementos": [e for e in self.listar_elementos("input, select, textarea, button, a")
+                          if e["visible"]],
+        }
+
     def inspeccionar(self, url):
         """Equivalente a `--inspect`: abre el portal y lista campos/botones visibles."""
         self.abrir(url)
-        elementos = self.page.eval_on_selector_all(
-            "input, select, textarea, button",
-            """els => els.map(e => ({tag: e.tagName, type: e.type || '', name: e.name || '',
-                                    id: e.id || '', visible: !!(e.offsetWidth || e.offsetHeight),
-                                    texto: e.tagName === 'BUTTON' ? (e.innerText || '').slice(0, 40) : ''}))""",
-        )
+        elementos = self.listar_elementos()
         return {
             "url": self.page.url,
             "user_agent": self.page.evaluate("navigator.userAgent"),

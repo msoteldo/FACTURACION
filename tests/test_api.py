@@ -143,3 +143,20 @@ def test_diagnostico_portal():
     names = {e["name"] for e in t["resultado"]["elementos"]}
     assert {"membershipOrRFC", "postalCode", "ticketNumber", "transactionNumber"} <= names
     assert t["resultado"]["captcha_visible"] is False
+
+
+def test_consulta_descarga_y_no_reenvia():
+    r = client.post("/consultas", headers=H, json={"numero": "9906433333333333333333"})
+    assert r.status_code == 202, r.text
+    t = esperar_estado(r.json()["id"], {"completado", "error", "esperando_respuesta"})
+    assert t["estado"] == "completado", t["error"]
+    assert sorted(t["archivos"]) == ["consulta.pdf", "consulta.xml"]
+    assert not any("Reenviar" in d for d in t["resultado"]["descargas_intentadas"])
+    assert "folio ABC123" in t["resultado"]["texto_visible"]
+    assert t["facturado"] is False
+    pdf = client.get(f"/facturas/{t['id']}/archivos/consulta.pdf", headers=H)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+
+
+def test_consulta_valida_numero():
+    assert client.post("/consultas", headers=H, json={"numero": "abc 123;"}).status_code == 422

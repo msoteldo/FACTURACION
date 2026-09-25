@@ -22,6 +22,31 @@ function modal(texto, alContinuar) {
   m.querySelector("#dynamic_modal_secondary_btn").onclick = () => m.remove();
 }
 
+function descargar(nombre, contenido, tipo) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+  a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+}
+
+function renderConsulta() {
+  app.innerHTML = `
+    <b>Consultar por Número de Ticket</b>
+    <input name="numeroDeTicketoFactura" placeholder="Número de Ticket o factura">
+    <button id="form_btn_cancel">Cancelar</button>
+    <button id="form_btn_accept">Continuar</button>`;
+  document.getElementById("form_btn_accept").onclick = () => {
+    const n = document.querySelector("[name=numeroDeTicketoFactura]").value;
+    if (n.startsWith("000")) { app.insertAdjacentHTML("beforeend", "<p role=alert>No se encontró la factura</p>"); return; }
+    app.innerHTML = `<p>Factura encontrada: folio ABC123</p>
+      <button id="btn_xml">Descargar XML</button>
+      <button id="btn_pdf">Descargar PDF</button>
+      <button id="btn_reenviar">Reenviar por correo</button>`;
+    document.getElementById("btn_xml").onclick = () => descargar("consulta.xml", "<cfdi:Comprobante/>", "application/xml");
+    document.getElementById("btn_pdf").onclick = () => descargar("consulta.pdf", "%PDF-1.4", "application/pdf");
+    document.getElementById("btn_reenviar").onclick = () => { window.__reenviado = 1; document.title = "REENVIADO"; };
+  };
+}
+
 function render() {
   const ruta = location.pathname;
   if (ruta === "/ticket") {
@@ -29,10 +54,12 @@ function render() {
       <div id="popup"><p>Aviso</p><button id="popup_btn_accept">Aceptar</button></div>
       <button id="obtener_factura_button">Obtener factura</button>
       <button id="invoice_tab_facturar">Facturar</button>
+      <button id="invoice_tab_consulta">Consulta o reenvía tu factura</button>
       <input name="membershipOrRFC"><input name="postalCode">
       <input name="ticketNumber"><input name="transactionNumber">
       <button id="form_btn_accept">Continuar</button>`;
     document.getElementById("popup_btn_accept").onclick = () => document.getElementById("popup").remove();
+    document.getElementById("invoice_tab_consulta").onclick = renderConsulta;
     document.getElementById("form_btn_accept").onclick = () => {
       const tc = document.querySelector("[name=ticketNumber]").value;
       if (tc.startsWith("999") && !estado.captcha) {
