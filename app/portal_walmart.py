@@ -7,6 +7,7 @@ se delega a un objeto `Interaccion`, que en el servidor pausa el trabajo hasta q
 alguien responda por la API.
 """
 import re
+import time
 import unicodedata
 from dataclasses import dataclass
 from typing import Optional
@@ -40,6 +41,17 @@ CAMPOS_DIRECCION = {
 CAMPO_CONSULTA = "numeroDeTicketoFactura"
 RE_DESCARGA = re.compile(r"descarg|download|\bpdf\b|\bxml\b", re.I)
 RE_NO_TOCAR = re.compile(r"reenv|enviar|correo|e-?mail|cancel|elimin|borrar|refactur", re.I)
+
+# Cómo reconocer cada pantalla: por su ruta O por un elemento propio de ella. El portal
+# puede cambiar de pantalla sin cambiar la URL, así que no basta con revisar la ruta.
+PANTALLAS = {
+    "datos fiscales": ("/address", "[name='Razón Social']"),
+    "forma de pago": ("/payment", "select:has(option[value='28'])"),
+    "entrega de la factura": ("/invoiceSelection", "#invoice_form_btn_submit, #method_pdf_radio"),
+}
+
+# Avisos emergentes: el conocido (#popup_btn_accept) y cualquier "Aceptar" dentro del overlay.
+SEL_AVISO = "#popup_btn_accept, #popup_overlay button:has-text('Aceptar')"
 
 USO_CFDI_BUSQUEDA = {"G01": "adquisici", "G03": "general"}
 FORMAS_PAGO = {"04": "Tarjeta de crédito", "28": "Tarjeta de débito", "05": "Monedero electrónico"}
@@ -143,13 +155,13 @@ class FlujoWalmart:
     def cerrar_popup(self, espera_ms=0):
         """El aviso del portal puede aparecer un momento DESPUÉS de cargar la página, y su
         overlay (#popup_overlay) intercepta todos los clics hasta que se acepta."""
-        boton = self.page.locator("#popup_btn_accept")
+        boton = self.page.locator(SEL_AVISO).locator("visible=true")
         if espera_ms:
             try:
                 boton.first.wait_for(state="visible", timeout=espera_ms)
             except PWTimeout:
                 pass
-        if not (boton.count() and boton.first.is_visible()):
+        if not boton.count():
             return False
         boton.first.click()
         try:  # el overlay se desvanece con una animación
@@ -177,6 +189,27 @@ class FlujoWalmart:
         self.ui.captura(self.page, captura)
         texto = self.texto_visible()
         raise FlujoError(f"{mensaje}\nTexto visible en el portal:\n{texto}" if texto else mensaje)
+
+    def en_pantalla(self, nombre, timeout_ms=10000):
+        """Espera a que el portal muestre la pantalla `nombre` (ver PANTALLAS)."""
+        ruta, selector = PANTALLAS[nombre]
+        fin = time.time() + timeout_ms / 1000
+        while True:
+            if ruta.lower() in self.page.url.lower():
+                return True
+            loc = self.page.locator(selector).locator("visible=true")
+            if loc.count():
+                return True
+            if "/formerror" in self.page.url.lower() or time.time() > fin:
+                return False
+            self.page.wait_for_timeout(500)
+
+    def exigir_pantalla(self, nombre, captura, pista=""):
+        if self.en_pantalla(nombre):
+            return
+        self.revisar_error_portal(captura)
+        self.fallar(f"El portal no avanzó a la pantalla de {nombre} (URL: {self.page.url}).{pista}",
+                    captura)
 
     def revisar_error_portal(self, captura):
         """Cuando el portal rechaza algo, navega a /formError con un mensaje y un botón
@@ -271,13 +304,13 @@ class FlujoWalmart:
             self.clic("#form_btn_accept", "'Continuar' de /ticket")
         self.manejar_modales("03_ticket")
         self.revisar_error_portal("03_error_portal")
-        if "/address" not in self.page.url:
-            self.fallar("El portal no avanzó a /address (¿TC/TR incorrectos o ticket ya facturado? "
-                        "Si ya está facturado, usa POST /consultas para recuperar la factura).",
-                        "03_no_avanzo")
+        self.exigir_pantalla("datos fiscales", "03_no_avanzo",
+                             " ¿TC/TR incorrectos o ticket ya facturado? Si ya está facturado, "
+                             "usa POST /consultas para recuperar la factura.")
 
     def pantalla_direccion(self, sol):
-        self.cerrar_popup()
+        # Aviso "Importante: ... capturar nuevamente su información fiscal" (sale con retraso).
+        self.cerrar_popup(espera_ms=3000)
         faltan = []
         for campo, name in CAMPOS_DIRECCION.items():
             valor = getattr(self.datos, campo)
@@ -327,8 +360,7 @@ class FlujoWalmart:
             self.revisar_captcha("direccion_enviada")
             self.clic("#form_btn_accept", "'Aceptar' de /address")
         self.manejar_modales("05_direccion")
-        if "/payment" not in self.page.url:
-            self.fallar("El portal no avanzó a /payment.", "05_no_avanzo")
+        self.exigir_pantalla("forma de pago", "05_no_avanzo")
 
     def pantalla_pago(self, sol):
         sel = self.page.locator("select")
@@ -343,8 +375,7 @@ class FlujoWalmart:
         self.ui.captura(self.page, "06_pago_elegido")
         self.clic("#form_btn_accept", "'Continuar' de /payment", 2500)
         self.manejar_modales("07_pago")
-        if "/invoiceSelection" not in self.page.url:
-            self.fallar("El portal no avanzó a /invoiceSelection.", "07_no_avanzo")
+        self.exigir_pantalla("entrega de la factura", "07_no_avanzo")
 
     def pantalla_entrega(self, sol):
         radio_id = "#method_email_radio" if sol.metodo_entrega == "email" else "#method_pdf_radio"

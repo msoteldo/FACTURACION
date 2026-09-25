@@ -9,7 +9,12 @@
 const estado = { rfc: "", captcha: false };
 const app = document.getElementById("app");
 
-function ir(ruta) { history.pushState({}, "", ruta); setTimeout(render, 300); }
+// Con estado.sinRutas la SPA cambia de pantalla SIN cambiar la URL (como se vio en el
+// portal real, donde la pantalla de datos fiscales no estaba en /address).
+function ir(ruta) {
+  if (estado.sinRutas) estado.vista = ruta; else history.pushState({}, "", ruta);
+  setTimeout(render, 300);
+}
 
 function modal(texto, alContinuar) {
   const m = document.createElement("div");
@@ -48,7 +53,7 @@ function renderConsulta() {
 }
 
 function render() {
-  const ruta = location.pathname;
+  const ruta = estado.vista || location.pathname;
   if (ruta === "/formError") {  // así responde el portal real a un ticket no válido
     app.innerHTML = `<div id="error_container"><p>${estado.error}</p>
       <button id="error_btn_accept" type="submit">Aceptar</button></div>`;
@@ -88,6 +93,7 @@ function render() {
       }
       if (tc.startsWith("000")) { estado.error = "Ticket ya facturado"; ir("/formError"); return; }
       estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
+      estado.sinRutas = tc.startsWith("88");
       ir("/address");
     };
   } else if (ruta === "/address") {
@@ -113,6 +119,16 @@ function render() {
     };
     document.getElementById("form_btn_accept").onclick = () =>
       modal("¿Confirmas que tus datos fiscales son correctos?", () => ir("/payment"));
+    // Aviso "Importante" con retraso y un botón cuyo id no conocemos.
+    setTimeout(() => {
+      const o = document.createElement("div");
+      o.id = "popup_overlay";
+      o.style = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000";
+      o.innerHTML = '<div><p>Importante: será necesario capturar nuevamente su información fiscal.</p>' +
+                    '<button class="btn-aviso">Aceptar</button></div>';
+      document.body.appendChild(o);
+      o.querySelector("button").onclick = () => o.remove();
+    }, 1000);
   } else if (ruta === "/payment") {
     app.innerHTML = `
       <select><option value="">Forma de pago</option><option value="04">Tarjeta de crédito</option>

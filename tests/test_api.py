@@ -195,3 +195,16 @@ def test_error_inesperado_guarda_captura(monkeypatch):
     t = esperar_estado(r.json()["id"], {"error", "completado"})
     assert t["estado"] == "error" and "falla simulada" in t["error"]
     assert "error_inesperado.png" in t["capturas"]
+
+
+def test_pantallas_sin_cambio_de_url_y_aviso_en_datos_fiscales():
+    # TC que empieza con 88: el portal simulado cambia de pantalla sin cambiar la URL.
+    t = nueva(tc="8806455555555555555555")
+    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
+    assert t["estado"] == "esperando_respuesta", t["error"]
+    assert t["pregunta"]["tipo"] == "modal"
+    responder(t, "continuar")
+    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
+    assert t["pregunta"]["tipo"] == "confirmar_facturar", t["error"]
+    responder(t, "cancelar")
+    assert esperar_estado(t["id"], {"cancelado", "error"})["estado"] == "cancelado"
