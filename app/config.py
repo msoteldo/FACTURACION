@@ -87,6 +87,10 @@ class Ajustes:
     ttl_trabajos_s: int
     max_bytes_imagen: int
     webhook_url: str
+    telegram_token: str
+    telegram_secreto: str
+    telegram_chats: frozenset
+    url_publica: str
 
     @classmethod
     def desde_env(cls):
@@ -107,4 +111,13 @@ class Ajustes:
             ttl_trabajos_s=_env_int("JOBS_TTL_S", 3600),
             max_bytes_imagen=_env_int("MAX_IMAGE_BYTES", 10 * 1024 * 1024),
             webhook_url=_env("NOTIFY_WEBHOOK_URL"),
+            telegram_token=_env("TELEGRAM_BOT_TOKEN"),
+            # Telegram lo manda en cada webhook; así nadie más puede inyectar mensajes.
+            telegram_secreto=_env("TELEGRAM_WEBHOOK_SECRET"),
+            # Chats autorizados (ids separados por coma). Vacío = nadie (salvo /start).
+            telegram_chats=frozenset(
+                int(x) for x in _env("TELEGRAM_ALLOWED_CHAT_IDS").replace(" ", "").split(",")
+                if x.lstrip("-").isdigit()),
+            # Render define RENDER_EXTERNAL_URL solo; PUBLIC_URL permite sobrescribirla.
+            url_publica=(_env("PUBLIC_URL") or _env("RENDER_EXTERNAL_URL")).rstrip("/"),
         )

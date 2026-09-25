@@ -93,6 +93,26 @@ Límites del plan gratis que el diseño ya considera:
   termine, o usa `metodo_entrega: "email"` para que el portal lo mande por correo.
 - **Un solo worker de uvicorn** (ya fijado en el Dockerfile): el estado no se comparte entre procesos.
 
+## Bot de Telegram
+
+El bot corre dentro del mismo servicio (webhook en `/telegram/webhook`), así que no
+necesita otro servidor: cada mensaje despierta al servicio si estaba dormido.
+
+1. En Telegram, habla con **@BotFather** → `/newbot` → copia el token.
+2. En Render → Environment: pon `TELEGRAM_BOT_TOKEN`. `TELEGRAM_WEBHOOK_SECRET` lo genera
+   el blueprint (o pon una cadena aleatoria de letras/números). Guarda y espera el deploy:
+   el webhook se registra solo al arrancar.
+3. Escríbele `/start` a tu bot: como aún no estás autorizado, te responde tu **chat id**.
+4. Pon ese id en `TELEGRAM_ALLOWED_CHAT_IDS` (varios, separados por coma) y guarda.
+5. Manda la foto de un ticket.
+
+Uso: foto → botones **G01 / G03** → (forma de pago si no se leyó) → captura con
+**✅ Facturar / ✖ Cancelar** → aviso final. Comandos: `/tc`, `/tr` (corregir lo leído),
+`/facturar TC TR`, `/consultar TC`, `/estado`, `/cancelar`, `/ayuda`.
+
+Si el bot no responde: `POST /telegram/configurar` (con tu API key) vuelve a registrar el
+webhook y muestra el último error que reportó Telegram.
+
 ## Desarrollo local
 
 ```bash

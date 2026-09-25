@@ -50,6 +50,7 @@ class Trabajo:
         self.actualizado = self.creado
         self.creado_ts = time.time()
         self.facturado = False            # True en cuanto se dio el clic irreversible
+        self.origen = None                # quién lo pidió (p. ej. {"chat": id} de Telegram)
         self._respuesta = None
         self._hay_respuesta = threading.Event()
         self._cancelar = threading.Event()
@@ -134,6 +135,8 @@ class GestorTrabajos:
     def __init__(self, ajustes, datos_fiscales):
         self.ajustes = ajustes
         self.datos = datos_fiscales
+        # Objetos con on_pregunta(t) y on_fin(t) (p. ej. el bot de Telegram).
+        self.oyentes = []
         self.trabajos = {}
         self._lock = threading.Lock()
         self._navegadores = threading.BoundedSemaphore(ajustes.max_navegadores)
@@ -141,7 +144,7 @@ class GestorTrabajos:
 
     # ------------------------------------------------------------- API pública
 
-    def crear(self, tipo, solicitud=None):
+    def crear(self, tipo, solicitud=None, origen=None):
         self.limpiar_viejos()
         with self._lock:
             if solicitud is not None:
@@ -155,6 +158,7 @@ class GestorTrabajos:
                             f"(estado: {t.estado}). Revísalo con GET /facturas/{t.id} "
                             f"o cancélalo con POST /facturas/{t.id}/cancelar.")
             t = Trabajo(tipo, solicitud, self.ajustes.dir_trabajos)
+            t.origen = origen  # antes de arrancar el hilo, para que los oyentes lo vean
             self.trabajos[t.id] = t
         threading.Thread(target=self._correr, args=(t,), daemon=True, name=f"trabajo-{t.id}").start()
         return t
@@ -185,8 +189,17 @@ class GestorTrabajos:
         if t.estado == "en_cola":
             t.estado = "cancelado"
 
+    def _avisar_oyentes(self, metodo, t):
+        for oyente in list(self.oyentes):
+            try:
+                getattr(oyente, metodo)(t)
+            except Exception:
+                log.exception("Falló el oyente %s.%s del trabajo %s", type(oyente).__name__, metodo, t.id)
+
     def notificar(self, t):
-        """Aviso opcional (p. ej. para un futuro bot de Telegram) cuando se requiere a un humano."""
+        """Avisa que un trabajo necesita a un humano: oyentes internos (bot de Telegram) y,
+        opcionalmente, un webhook externo."""
+        self._avisar_oyentes("on_pregunta", t)
         if not self.ajustes.webhook_url:
             return
         cuerpo = {"id": t.id, "estado": t.estado,
@@ -284,3 +297,4 @@ class GestorTrabajos:
                 (t.dir / "estado.json").write_text(
                     json.dumps(t.a_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
                 log.info("Trabajo %s terminó: %s", t.id, t.estado)
+                self._avisar_oyentes("on_fin", t)

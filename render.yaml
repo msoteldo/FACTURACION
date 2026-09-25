@@ -40,3 +40,10 @@ services:
         value: General de Ley Personas Morales
       - key: ANSWER_TIMEOUT_S
         value: "600"
+      # Bot de Telegram (opcional)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true   # Render genera uno; no hace falta copiarlo a ningún lado
+      - key: TELEGRAM_ALLOWED_CHAT_IDS
+        sync: false
