@@ -18,10 +18,14 @@ function ir(ruta) {
 
 function modal(texto, alContinuar) {
   const m = document.createElement("div");
-  m.setAttribute("role", "dialog");
-  m.innerHTML = `<p>${texto}</p>
-    <button id="dynamic_modal_primary_btn">Continuar</button>
-    <button id="dynamic_modal_secondary_btn">Cerrar</button>`;
+  m.className = "modal fade show";
+  // Estructura tipo Bootstrap: el texto va en modal-body y los botones en modal-footer.
+  m.innerHTML = `<div class="modal-dialog"><div class="modal-content">
+      <div class="modal-body"><p>${texto}</p></div>
+      <div class="modal-footer">
+        <button id="dynamic_modal_secondary_btn">Cerrar</button>
+        <button id="dynamic_modal_primary_btn">Continuar</button>
+      </div></div></div>`;
   document.body.appendChild(m);
   m.querySelector("#dynamic_modal_primary_btn").onclick = () => { m.remove(); alContinuar(); };
   m.querySelector("#dynamic_modal_secondary_btn").onclick = () => m.remove();

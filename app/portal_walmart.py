@@ -256,10 +256,17 @@ class FlujoWalmart:
             primario = self.page.locator("#dynamic_modal_primary_btn")
             if not (primario.count() and primario.first.is_visible()):
                 return
+            # Se sube desde el botón hasta el primer contenedor que tenga texto además de los
+            # botones (un selector tipo [class*=modal] atrapaba solo el "modal-footer").
             texto = primario.first.evaluate(
                 """e => {
-                    const m = e.closest('[role=dialog], .modal, [class*=modal]');
-                    return ((m || e.parentElement.parentElement || e.parentElement).innerText || '').trim();
+                    let c = e.parentElement;
+                    for (let i = 0; i < 10 && c && c !== document.body; i++, c = c.parentElement) {
+                        let t = c.innerText || '';
+                        for (const b of c.querySelectorAll('button')) t = t.replace(b.innerText, '');
+                        if (t.trim()) return (c.innerText || '').trim();
+                    }
+                    return '';
                 }"""
             )
             captura = self.ui.captura(self.page, f"{paso}_modal_{i}")
