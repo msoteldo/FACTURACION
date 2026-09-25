@@ -4,4 +4,4 @@ python-multipart==0.0.20
 email-validator==2.3.0
 playwright==1.63.0
 requests==2.33.1
-python-dotenv==1.1.1
+python-dotenv==1.2.2
