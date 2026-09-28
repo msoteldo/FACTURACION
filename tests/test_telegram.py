@@ -21,6 +21,8 @@ class APIFalsa:
     def llamar(self, metodo, files=None, **params):
         if "reply_markup" in params and isinstance(params["reply_markup"], str):
             params["reply_markup"] = json.loads(params["reply_markup"])
+        if files:
+            params["_archivo"] = next(iter(files.values()))[0]
         self.llamadas.append((metodo, params, bool(files)))
         return {"message_id": next(self._ids)}
 
@@ -91,8 +93,18 @@ def test_flujo_foto_a_factura(monkeypatch):
 
         # Forma de pago leída del ticket: con elegir G01 ya arranca.
         bot.procesar(boton(uso_g01))
-        pregunta = api.buscar(lambda m, p: m == "sendPhoto" and "¿Facturar?" in texto(p))
-        assert "débito" in texto(pregunta) and "datos fiscales" in texto(pregunta)  # mensaje del portal
+        foto_datos = api.buscar(lambda m, p: m == "sendPhoto" and "datos fiscales" in texto(p))
+        assert foto_datos["_archivo"] == "04_direccion_llenada.png"
+        pregunta = api.buscar(lambda m, p: m == "sendMessage" and "¿Facturar?" in texto(p))
+        t = texto(pregunta)
+        assert "débito" in t and "¿Confirmas que tus datos fiscales" in t  # mensaje del portal
+        # Datos leídos del portal ya llenado (valores de prueba de conftest).
+        for esperado in ("RFC: CPA010101AB1", "Razón social: CLUB DE PADEL DE PRUEBA",
+                         "Colonia: Centro", "Código postal: 01000", "Correo: facturas@example.com",
+                         "Régimen fiscal: 601 - General de Ley Personas Morales",
+                         "Uso CFDI: G01 - Adquisición de mercancías"):
+            assert esperado in t, esperado
+        assert "Entrega: 📧 por correo a facturas@example.com" in t
         facturar = next(b for b in botones(pregunta) if b.endswith(":facturar"))
 
         bot.procesar(boton(facturar))

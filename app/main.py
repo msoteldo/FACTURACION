@@ -98,7 +98,7 @@ class NuevaFactura(BaseModel):
         ..., description="G01 = Adquisición de mercancías (reventa en barra/snack); G03 = Gastos en general")
     forma_pago: Literal["04", "28", "05"] = Field(
         ..., description="04 = Tarjeta de crédito, 28 = Tarjeta de débito, 05 = Monedero electrónico")
-    metodo_entrega: Literal["email", "descarga"] = "descarga"
+    metodo_entrega: Literal["email", "descarga"] = "email"
     correo_alterno: Optional[EmailStr] = None
 
 

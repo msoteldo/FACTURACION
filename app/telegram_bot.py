@@ -278,7 +278,7 @@ class BotFacturacion:
         if faltan:
             return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(faltan)}")
         sol = SolicitudFactura(tc=p["tc"], tr=p["tr"], uso_cfdi=p["uso_cfdi"],
-                               forma_pago=p["forma_pago"], metodo_entrega="descarga")
+                               forma_pago=p["forma_pago"], metodo_entrega="email")
         try:
             t = self.gestor.crear("factura", sol, origen={"chat": chat})
         except ValueError as e:
@@ -401,16 +401,8 @@ class BotFacturacion:
             return
         lineas = []
         if p["tipo"] == "confirmar_facturar":
-            d = p.get("datos") or {}
-            lineas.append("<b>¿Facturar?</b> Esto ya no se puede deshacer.")
-            for etiqueta, clave in (("TC", "tc"), ("TR", "tr"), ("RFC", "rfc"),
-                                    ("Razón social", "razon_social"), ("Uso CFDI", "uso_cfdi_portal"),
-                                    ("Forma de pago", "forma_pago")):
-                if d.get(clave):
-                    lineas.append(f"{etiqueta}: {_e(d[clave])}")
-            for m in d.get("mensajes_del_portal") or []:
-                lineas.append(f"ℹ️ Portal: {_e(_corta(m, 200))}")
-        elif p["tipo"] == "revisar_direccion":
+            return self._confirmar_facturar(chat, t, p)
+        if p["tipo"] == "revisar_direccion":
             lineas.append("<b>Tus datos fiscales no coinciden con el portal:</b>")
             for campo, v in (p.get("datos") or {}).items():
                 lineas.append(f"{_e(campo)}: tuyo «{_e(v.get('esperado'))}» / portal «{_e(v.get('en_portal'))}»")
@@ -426,13 +418,42 @@ class BotFacturacion:
                       else f"\n⏱ Tienes {seg} s para responder.")
         self.enviar_captura(chat, t, p.get("captura"), "\n".join(lineas), _teclado(botones))
 
+    def _confirmar_facturar(self, chat, t, p):
+        """Primero la captura de los datos fiscales ya llenados en el portal; luego el texto con
+        esos mismos datos (leídos del portal) y los botones al final, para revisar y decidir."""
+        d = p.get("datos") or {}
+        self.enviar_captura(chat, t, d.get("captura_datos_fiscales") or p.get("captura"),
+                            "📋 Así quedaron tus datos fiscales en el portal.")
+        lineas = ["<b>¿Facturar?</b> Revisa los datos; esto ya no se puede deshacer.", "",
+                  "<b>Ticket</b>",
+                  f"TC: <code>{_e(d.get('tc', ''))}</code>",
+                  f"TR: <code>{_e(d.get('tr', ''))}</code>"]
+        if d.get("forma_pago"):
+            lineas.append(f"Forma de pago: {_e(d['forma_pago'])}")
+        fiscales = d.get("datos_fiscales_portal") or {}
+        if d.get("entrega") == "email":
+            lineas.append(f"Entrega: 📧 por correo{' a ' + _e(fiscales['Correo']) if fiscales.get('Correo') else ''}")
+        if fiscales:
+            lineas += ["", "<b>Datos fiscales en el portal</b>"]
+            lineas += [f"{_e(k)}: {_e(v)}" for k, v in fiscales.items()]
+        else:  # respaldo: lo configurado
+            lineas += ["", f"RFC: {_e(d.get('rfc', ''))}", f"Razón social: {_e(d.get('razon_social', ''))}",
+                       f"Uso CFDI: {_e(d.get('uso_cfdi_portal') or d.get('uso_cfdi', ''))}"]
+        for m in d.get("mensajes_del_portal") or []:
+            lineas.append(f"\nℹ️ Portal: {_e(_corta(m, 200))}")
+        seg = p["expira_en_s"]
+        lineas.append(f"\n⏱ Tienes {seg // 60} min para responder." if seg >= 60
+                      else f"\n⏱ Tienes {seg} s para responder.")
+        botones = [[(ETIQUETAS.get(o, o), f"r:{t.id}:{p['id']}:{o}") for o in p["opciones"]]]
+        self.enviar(chat, "\n".join(lineas), _teclado(botones))
+
     def on_fin(self, t):
         chat = self._chat_de(t)
         if chat is None:
             return
         if t.estado == "completado" and t.tipo == "factura":
             self.enviar_captura(chat, t, "11_resultado_final.png",
-                                "✅ <b>Factura generada.</b> Walmart la envía a tu correo (PDF y XML).")
+                                "✅ <b>Factura generada.</b> Walmart la envía por correo (PDF y XML).")
         elif t.estado == "completado" and t.tipo == "consulta":
             # Si el portal no dio error, el ticket existe y ya tiene factura.
             self.pendientes.pop(chat, None)

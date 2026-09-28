@@ -374,7 +374,9 @@ class FlujoWalmart:
             self.fallar(f"No encontré el Uso de CFDI {sol.uso_cfdi}.", "04_uso_error")
         self.resumen["uso_cfdi_portal"] = uso
 
-        self.ui.captura(self.page, "04_direccion_llenada")
+        # Lo que realmente quedó en el portal (no lo configurado), para revisarlo antes de facturar.
+        self.resumen["datos_fiscales_portal"] = self.leer_datos_fiscales_portal()
+        self.resumen["captura_datos_fiscales"] = self.ui.captura(self.page, "04_direccion_llenada")
         self.revisar_captcha("direccion")
         self.clic("#form_btn_accept", "'Aceptar' de /address")
         if self.hay_captcha():
@@ -382,6 +384,26 @@ class FlujoWalmart:
             self.clic("#form_btn_accept", "'Aceptar' de /address")
         self.manejar_modales("05_direccion")
         self.exigir_pantalla("forma de pago", "05_no_avanzo")
+
+    def leer_datos_fiscales_portal(self):
+        datos = {}
+        for etiqueta, name in (("RFC", "rfc"), ("Razón social", "Razón Social"), ("Calle", "Calle"),
+                               ("Núm. exterior", "Número exterior"), ("Núm. interior", "Número interior"),
+                               ("Colonia", "Colonia"), ("Municipio", "Municipio/Delegación"),
+                               ("Estado", "Estado"), ("Código postal", "Código Postal"),
+                               ("Correo", "email")):
+            loc = self.page.locator(f"[name='{name}']")
+            valor = loc.first.input_value().strip() if loc.count() else ""
+            if valor:
+                datos[etiqueta] = valor
+        for etiqueta, name in (("Régimen fiscal", "Régimen Fiscal"), ("Uso CFDI", "Uso Factura")):
+            loc = self.page.locator(f"[name='{name}']")
+            if loc.count():
+                texto = loc.first.evaluate(
+                    "e => e.selectedIndex >= 0 && e.value ? e.options[e.selectedIndex].text.trim() : ''")
+                if texto:
+                    datos[etiqueta] = texto
+        return datos
 
     def pantalla_pago(self, sol):
         sel = self.page.locator("select")

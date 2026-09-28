@@ -36,7 +36,7 @@ Swagger UI (botón **Authorize**), que sirve como frontend provisional.
 | GET | `/salud` | health check de Render |
 | GET | `/configuracion` | qué variables faltan (sin mostrar valores) |
 | POST | `/tickets/extraer` | multipart `foto` -> TC, TR, total, `forma_pago_sat_sugerida`, `requiere_revision` |
-| POST | `/facturas` | inicia un trabajo: `tc`, `tr`, `uso_cfdi` (G01/G03), `forma_pago` (04/28/05), `metodo_entrega` (email/descarga), `correo_alterno` |
+| POST | `/facturas` | inicia un trabajo: `tc`, `tr`, `uso_cfdi` (G01/G03), `forma_pago` (04/28/05), `metodo_entrega` (email —por defecto— o descarga), `correo_alterno` |
 | GET | `/facturas/{id}` | estado, pregunta vigente, eventos, capturas y archivos |
 | POST | `/facturas/{id}/respuesta` | `{"pregunta_id": n, "respuesta": "<una de las opciones>"}` |
 | POST | `/facturas/{id}/cancelar` | cancela (solo antes del clic en Facturar) |
@@ -64,7 +64,7 @@ Ejemplo con curl:
 URL=https://tu-servicio.onrender.com; K="X-API-Key: $API_KEY"
 curl -H "$K" -F foto=@ticket.jpg $URL/tickets/extraer
 curl -H "$K" -H 'Content-Type: application/json' -X POST $URL/facturas \
-  -d '{"tc":"99064...","tr":"03388","uso_cfdi":"G01","forma_pago":"28","metodo_entrega":"descarga"}'
+  -d '{"tc":"99064...","tr":"03388","uso_cfdi":"G01","forma_pago":"28"}'
 curl -H "$K" $URL/facturas/<id>          # repetir hasta "esperando_respuesta"
 curl -H "$K" -H 'Content-Type: application/json' -X POST $URL/facturas/<id>/respuesta \
   -d '{"pregunta_id":2,"respuesta":"facturar"}'
