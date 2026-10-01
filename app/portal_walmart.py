@@ -60,7 +60,8 @@ RE_MODAL_DELICADO = re.compile(
     r"no se puede|no coincide|error|incorrect|inv[aá]lid|rechaz", re.I)
 
 USO_CFDI_BUSQUEDA = {"G01": "adquisici", "G03": "general"}
-FORMAS_PAGO = {"04": "Tarjeta de crédito", "28": "Tarjeta de débito", "05": "Monedero electrónico"}
+FORMAS_PAGO = {"01": "Efectivo", "04": "Tarjeta de crédito", "28": "Tarjeta de débito",
+               "05": "Monedero electrónico"}
 
 SEL_CAPTCHA = (
     "iframe[src*='captcha' i]:not([src*='size=invisible']), "
@@ -87,7 +88,7 @@ class SolicitudFactura:
     tc: str
     tr: str
     uso_cfdi: str            # "G01" | "G03"
-    forma_pago: str          # "04" | "28" | "05"
+    forma_pago: str          # "01" | "04" | "28" | "05"
     metodo_entrega: str      # "email" | "descarga"
     correo_alterno: Optional[str] = None
 
@@ -199,16 +200,20 @@ class FlujoWalmart:
 
     def en_pantalla(self, nombre, timeout_ms=10000):
         """Espera a que el portal muestre la pantalla `nombre` (ver PANTALLAS)."""
-        ruta, selector = PANTALLAS[nombre]
+        return self.pantalla_siguiente((nombre,), timeout_ms) == nombre
+
+    def pantalla_siguiente(self, nombres, timeout_ms=10000):
+        """Espera a que aparezca cualquiera de las pantallas `nombres`; devuelve cuál, o None."""
         fin = time.time() + timeout_ms / 1000
         while True:
-            if ruta.lower() in self.page.url.lower():
-                return True
-            loc = self.page.locator(selector).locator("visible=true")
-            if loc.count():
-                return True
+            for nombre in nombres:
+                ruta, selector = PANTALLAS[nombre]
+                if ruta.lower() in self.page.url.lower():
+                    return nombre
+                if self.page.locator(selector).locator("visible=true").count():
+                    return nombre
             if "/formerror" in self.page.url.lower() or time.time() > fin:
-                return False
+                return None
             self.page.wait_for_timeout(500)
 
     def exigir_pantalla(self, nombre, captura, pista=""):
@@ -383,7 +388,11 @@ class FlujoWalmart:
             self.revisar_captcha("direccion_enviada")
             self.clic("#form_btn_accept", "'Aceptar' de /address")
         self.manejar_modales("05_direccion")
-        self.exigir_pantalla("forma de pago", "05_no_avanzo")
+        # Con pago en efectivo el portal se salta la forma de pago y va directo a la entrega.
+        siguiente = self.pantalla_siguiente(("forma de pago", "entrega de la factura"))
+        if siguiente is None:
+            self.exigir_pantalla("forma de pago", "05_no_avanzo")  # reporta el error con detalle
+        return siguiente
 
     def leer_datos_fiscales_portal(self):
         datos = {}
@@ -466,8 +475,11 @@ class FlujoWalmart:
                         "razon_social": self.datos.razon_social, "uso_cfdi": sol.uso_cfdi}
         self.abrir(url)
         self.pantalla_ticket(sol)
-        self.pantalla_direccion(sol)
-        self.pantalla_pago(sol)
+        if self.pantalla_direccion(sol) == "forma de pago":
+            self.pantalla_pago(sol)
+        else:
+            self.resumen["forma_pago"] = "La define el ticket (el portal no la pidió; p. ej. efectivo)"
+            self.ui.evento("El portal no pidió forma de pago; pasó directo a la entrega.")
         self.pantalla_entrega(sol)
         return {"texto_final": self.texto_visible(800)}
 

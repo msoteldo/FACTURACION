@@ -103,6 +103,7 @@ function render() {
       }
       estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
       estado.sinRutas = tc.startsWith("88");
+      estado.efectivo = tc.startsWith("55");  // pagado en efectivo: el portal no pide forma de pago
       ir("/address");
     };
   } else if (ruta === "/address") {
@@ -127,7 +128,8 @@ function render() {
       if (e.target.value.endsWith("SA DE CV")) setTimeout(() => e.target.value = e.target.value.replace("SA DE CV", "S.A. DE C.V."), 200);
     };
     document.getElementById("form_btn_accept").onclick = () =>
-      modal("¿Confirmas que tus datos fiscales son correctos?", () => ir("/payment"));
+      modal("¿Confirmas que tus datos fiscales son correctos?",
+            () => ir(estado.efectivo ? "/invoiceSelection" : "/payment"));
     // Aviso "Importante" con retraso y un botón cuyo id no conocemos.
     setTimeout(() => {
       const o = document.createElement("div");

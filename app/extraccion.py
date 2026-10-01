@@ -46,7 +46,7 @@ Reglas importantes:
 """
 
 # Forma de pago del ticket -> clave SAT que espera el portal de Walmart.
-FORMA_PAGO_SAT = {"credito": "04", "debito": "28", "monedero": "05"}
+FORMA_PAGO_SAT = {"efectivo": "01", "credito": "04", "debito": "28", "monedero": "05"}
 
 REINTENTABLES = {429, 500, 503}
 

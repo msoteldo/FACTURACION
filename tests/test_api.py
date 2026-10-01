@@ -211,3 +211,13 @@ def test_modal_delicado_si_se_pregunta():
     responder(t, "cerrar")
     t = esperar_estado(t["id"], {"cancelado", "error", "completado"})
     assert t["facturado"] is False
+
+
+def test_pago_en_efectivo_sin_pantalla_de_forma_de_pago():
+    t = nueva(tc="5506412345678901234567", forma_pago="01")
+    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
+    assert t["estado"] == "esperando_respuesta", t["error"]
+    assert t["pregunta"]["tipo"] == "confirmar_facturar"
+    assert "La define el ticket" in t["pregunta"]["datos"]["forma_pago"]
+    responder(t, "cancelar")
+    assert esperar_estado(t["id"], {"cancelado", "error"})["estado"] == "cancelado"

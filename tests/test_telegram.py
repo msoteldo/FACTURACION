@@ -249,3 +249,27 @@ def test_consultar_ticket_facturado_solo_avisa(monkeypatch):
         assert CHAT not in bot.pendientes
     finally:
         main.gestor.oyentes.remove(bot)
+
+
+def test_efectivo_como_opcion_de_forma_de_pago(monkeypatch):
+    bot, api = nuevo_bot()
+    try:
+        # Gemini leyó "efectivo": ya no hay que preguntar la forma de pago.
+        ticket_leido(monkeypatch, forma=extraccion.FORMA_PAGO_SAT["efectivo"],
+                     tc="5506400000000000000002")
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        assert "Efectivo" in texto(resumen)
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
+        bot.procesar(boton(next(b for b in botones(usos) if b.endswith(":G03"))))
+        pregunta = api.buscar(lambda m, p: "¿Facturar?" in texto(p))
+        assert "La define el ticket" in texto(pregunta)
+        bot.procesar(boton(next(b for b in botones(pregunta) if b.endswith(":cancelar"))))
+        api.buscar(lambda m, p: "No se facturó nada" in texto(p))
+        # Y en el menú manual de forma de pago aparece Efectivo.
+        bot._pedir_forma(CHAT, {"id": 0})
+        menu = api.llamadas[-1][1]
+        assert any(b.endswith(":01") for b in botones(menu))
+    finally:
+        main.gestor.oyentes.remove(bot)

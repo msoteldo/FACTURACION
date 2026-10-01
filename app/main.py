@@ -96,8 +96,9 @@ class NuevaFactura(BaseModel):
     tr: str = Field(..., pattern=r"^\d{1,10}$", description="TR# del ticket (solo dígitos)")
     uso_cfdi: Literal["G01", "G03"] = Field(
         ..., description="G01 = Adquisición de mercancías (reventa en barra/snack); G03 = Gastos en general")
-    forma_pago: Literal["04", "28", "05"] = Field(
-        ..., description="04 = Tarjeta de crédito, 28 = Tarjeta de débito, 05 = Monedero electrónico")
+    forma_pago: Literal["01", "04", "28", "05"] = Field(
+        ..., description="01 = Efectivo, 04 = Tarjeta de crédito, 28 = Tarjeta de débito, "
+                         "05 = Monedero electrónico (si el portal no pide forma de pago, se ignora)")
     metodo_entrega: Literal["email", "descarga"] = "email"
     correo_alterno: Optional[EmailStr] = None
 

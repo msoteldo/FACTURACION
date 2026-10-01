@@ -29,7 +29,7 @@ from .portal_walmart import SolicitudConsulta, SolicitudFactura
 log = logging.getLogger("facturacion.telegram")
 
 USOS = {"G01": "🛒 G01 Mercancías (barra)", "G03": "🧾 G03 Gastos generales"}
-FORMAS = {"04": "Crédito", "28": "Débito", "05": "Monedero"}
+FORMAS = {"01": "Efectivo", "04": "Crédito", "28": "Débito", "05": "Monedero"}
 ETIQUETAS = {"facturar": "✅ Facturar", "cancelar": "✖ Cancelar", "continuar": "Continuar",
              "cerrar": "Cerrar", "reintentar": "🔄 Reintentar"}
 MAX_TEXTO, MAX_PIE = 4000, 1000
@@ -267,8 +267,8 @@ class BotFacturacion:
         self._mostrar_pendiente(chat, p)
 
     def _pedir_forma(self, chat, p):
-        self.enviar(chat, "¿Con qué se pagó?", _teclado(
-            [[(nombre, f"f:{p['id']}:{codigo}") for codigo, nombre in FORMAS.items()]]))
+        opciones = [(nombre, f"f:{p['id']}:{codigo}") for codigo, nombre in FORMAS.items()]
+        self.enviar(chat, "¿Con qué se pagó?", _teclado([opciones[:2], opciones[2:]]))
 
     def _lanzar(self, chat, p):
         if not re.fullmatch(r"\d{10,30}", p["tc"]) or not re.fullmatch(r"\d{1,10}", p["tr"]):
