@@ -16,7 +16,7 @@ import shutil
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from playwright.sync_api import sync_playwright
@@ -129,6 +129,9 @@ class InteraccionTrabajo:
             "captura": captura,
             "datos": datos,
             "expira_en_s": self.gestor.ajustes.timeout_respuesta_s,
+            # Hora absoluta: la web calcula lo que falta aunque se recargue la página.
+            "expira_en": (datetime.now(timezone.utc) + timedelta(
+                seconds=self.gestor.ajustes.timeout_respuesta_s)).isoformat(timespec="seconds"),
         }
         # Queda en el historial para poder diagnosticar después (p. ej. el texto de un modal).
         self.evento(f"Pregunta '{tipo}' #{self.t._contador_preguntas}: {texto[:500]}")
