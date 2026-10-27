@@ -214,7 +214,7 @@ def test_editar_perfil_aplica_a_la_siguiente_factura(app_url, pagina_con_sesion,
     p.get_by_label("CP").fill("01000")
     p.get_by_label("Razón social").fill("CLUB DE PADEL SA DE CV")
     p.get_by_role("button", name="Guardar").click()
-    expect(p.get_by_text("Aplica a las facturas nuevas")).to_be_visible()
+    expect(p.get_by_text("Datos guardados. Aplican a las facturas nuevas.")).to_be_visible()
     expect(p.locator("#error-cp")).to_be_empty()
 
     tc = "9906400000000000000106"
@@ -233,7 +233,7 @@ def test_perfil_sin_base_muestra_503(app_url, pagina_con_sesion):
     p = pagina_con_sesion
     p.goto(f"{app_url}#/perfil")
     p.get_by_role("button", name="Guardar").click()
-    expect(p.get_by_text("Configura DATABASE_URL")).to_be_visible()
+    expect(p.locator(".toast.error")).to_contain_text("Configura DATABASE_URL")
 
 
 # ------------------------------------------------------------------ correcciones de la revisión final
@@ -356,15 +356,17 @@ def test_landing_con_movimiento_reducido(servidor_web, _navegador):
 
 def test_barra_muestra_razon_social_una_sola_vez(app_url, pagina_con_sesion):
     p = pagina_con_sesion
+    # La página anterior ya pidió su /perfil: que no se cuente (networkidle no espera, ya se alcanzó al cargar).
+    expect(p.locator(".barra")).to_contain_text("CLUB DE PADEL DE PRUEBA")
     perfiles = []
-    p.on("request", lambda r: r.url.endswith("/perfil") and r.method == "GET" and perfiles.append(1))
+    p.on("request", lambda r: r.url.endswith("/perfil") and r.method == "GET" and perfiles.append(p.url))
     p.reload()
     expect(p.locator(".barra")).to_contain_text("CLUB DE PADEL DE PRUEBA")
     p.get_by_role("link", name="Datos fiscales").click()
     expect(p.get_by_label("RFC")).to_have_value("CPA010101AB1")
     p.get_by_role("link", name="Nueva factura").click()
     expect(p.get_by_label("Foto del ticket")).to_be_attached()
-    assert len(perfiles) == 2          # uno de la barra al recargar y uno de la vista de datos fiscales
+    assert len(perfiles) == 2, perfiles   # uno de la barra al recargar y uno de la vista de datos fiscales
 
 
 def test_foco_al_titulo_al_cambiar_de_pantalla(pagina_con_sesion):

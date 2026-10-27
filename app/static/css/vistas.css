@@ -131,3 +131,15 @@
   .campos.llenar .campo { animation: aparecer 200ms ease both; }
   @keyframes aparecer { from { opacity: 0; } }
 }
+
+/* ---------- datos fiscales ---------- */
+.datos { max-width: 780px; display: grid; gap: 18px; }
+.datos fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.datos legend {
+  padding: 0; margin-bottom: 14px;
+  font-size: 12.5px; font-weight: 700; color: var(--soft); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.datos .campo.ancho { grid-column: 1 / -1; }
+.boton-texto { display: inline-block; transition: opacity 120ms ease, filter 120ms ease; }
+.boton-texto.cambiando { opacity: 0.4; filter: blur(2px); }
+.guardar { min-width: 140px; }
