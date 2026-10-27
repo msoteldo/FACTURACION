@@ -252,3 +252,14 @@ def test_sin_opcion_de_correo_el_error_lista_las_opciones():
     assert t["estado"] == "error"
     assert "No encontré la opción de entrega por correo" in t["error"]
     assert "Opciones de entrega en la pantalla" in t["error"] and "method_pdf_radio" in t["error"]
+
+
+def test_portal_lento_espera_los_controles_de_pago_y_entrega():
+    # En el portal real la URL cambia a /payment o /invoiceSelection antes de que existan
+    # el select de forma de pago y las opciones de entrega.
+    r = client.post("/facturas", headers=H, json={"tc": "2206400000000000000001", "tr": "03388",
+                                                   "uso_cfdi": "G01", "forma_pago": "28", "metodo_entrega": "email"})
+    t = esperar_estado(r.json()["id"], {"esperando_respuesta", "error"}, timeout=90)
+    assert t["estado"] == "esperando_respuesta", t["error"]
+    assert t["pregunta"]["datos"]["forma_pago"] == "Tarjeta de débito"
+    client.post(f"/facturas/{t['id']}/cancelar", headers=H)
