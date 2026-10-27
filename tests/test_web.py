@@ -86,8 +86,8 @@ def test_factura_walmart_de_punta_a_punta(pagina_con_sesion, monkeypatch, png):
     p.get_by_label("Entrega").select_option("descarga")
     p.get_by_role("button", name="Facturar", exact=True).click()
     expect(p).to_have_url(re.compile(r"#/trabajo/\w+$"))
-    p.aceptar_confirm = True
     p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
+    p.get_by_role("button", name="Sí, facturar").click()
     expect(p.locator(".estado")).to_have_text("completado", timeout=60000)
 
 
@@ -294,3 +294,34 @@ def test_modo_oscuro(app_url, _navegador):
     p.goto(app_url)
     assert p.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(13, 17, 24)"
     ctx.close()
+
+
+# ------------------------------------------------------------------ diálogo de confirmación
+
+def test_escape_en_el_dialogo_no_factura(app_url, pagina_con_sesion):
+    tid = _trabajo_por_api("9906400000000000000202")
+    try:
+        p = pagina_con_sesion
+        p.goto(f"{app_url}#/trabajo/{tid}")
+        facturar = p.get_by_role("button", name="Facturar", exact=True)
+        facturar.click(timeout=60000)
+        expect(p.get_by_role("dialog")).to_be_visible()
+        expect(p.get_by_role("button", name="Sí, facturar")).to_be_focused()
+        p.keyboard.press("Escape")
+        expect(p.get_by_role("dialog")).to_be_hidden()
+        expect(facturar).to_be_focused()
+        assert main.gestor.obtener(tid).estado == "esperando_respuesta"
+    finally:
+        client.post(f"/facturas/{tid}/cancelar", headers=H)
+
+
+def test_doble_clic_en_si_facturar_manda_una_respuesta(app_url, pagina_con_sesion):
+    tid = _trabajo_por_api("9906400000000000000203")
+    p = pagina_con_sesion
+    posts = []
+    p.on("request", lambda r: r.method == "POST" and r.url.endswith("/respuesta") and posts.append(r.url))
+    p.goto(f"{app_url}#/trabajo/{tid}")
+    p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
+    p.get_by_role("button", name="Sí, facturar").dblclick()
+    expect(p.locator(".estado").first).to_have_text("completado", timeout=60000)
+    assert len(posts) == 1

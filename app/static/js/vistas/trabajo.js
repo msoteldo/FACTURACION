@@ -1,6 +1,7 @@
 // Seguimiento de un trabajo: consulta el estado mientras siga activo y muestra las preguntas
 // que el flujo le hace a una persona (modal, captcha, revisar dirección, confirmar "Facturar").
 import { api } from "../api.js";
+import { confirmar } from "../dialogo.js";
 import { el, vaciar } from "../dom.js";
 
 const ACTIVOS = ["en_cola", "ejecutando", "esperando_respuesta"];
@@ -13,14 +14,17 @@ function urlArchivo(id, nombre) {
   return `/facturas/${encodeURIComponent(id)}/archivos/${encodeURIComponent(nombre)}`;
 }
 
-function resumenParaConfirmar(datos) {
+function confirmacion(datos) {
+  // Texto del diálogo antes del clic irreversible: monto si lo hay, razón social y RFC del portal.
   const d = datos || {};
   const fiscales = d.datos_fiscales_portal || {};
-  const lineas = [
-    ["TC", d.tc], ["Folio", d.folio], ["Ticket", d.ticket], ["Uso CFDI", d.uso_cfdi || fiscales["Uso CFDI"]],
-    ["Forma de pago", d.forma_pago], ["RFC", fiscales.RFC],
-  ].filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
-  return ["¿Facturar? Este paso no se puede deshacer.", "", ...lineas].join("\n");
+  const quien = [fiscales["Razón social"], fiscales.RFC && `RFC ${fiscales.RFC}`].filter(Boolean).join(", ");
+  return {
+    titulo: d.total ? `¿Facturar $${d.total}?` : "¿Facturar este ticket?",
+    texto: `${quien ? `Se emitirá el CFDI a nombre de ${quien}. ` : ""}Este paso no se puede deshacer.`,
+    aceptar: "Sí, facturar",
+    cancelar: "Revisar de nuevo",
+  };
 }
 
 function diferencias(datos) {
@@ -182,7 +186,7 @@ export function montar(contenedor, id) {
   }
 
   async function responder(p, opcion, botones) {
-    if (opcion === "facturar" && !window.confirm(resumenParaConfirmar(p.datos))) return;
+    if (opcion === "facturar" && !(await confirmar(confirmacion(p.datos)))) return;
     botones.forEach((b) => { b.disabled = true; });
     try {
       await api("POST", `/facturas/${encodeURIComponent(id)}/respuesta`, { pregunta_id: p.id, respuesta: opcion });
