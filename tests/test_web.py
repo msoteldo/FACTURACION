@@ -49,6 +49,7 @@ def test_salir_regresa_al_login(pagina_con_sesion):
 # ------------------------------------------------------------------ nueva factura y trabajo
 
 import base64  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
 
 import pytest  # noqa: E402
 
@@ -88,7 +89,7 @@ def test_factura_walmart_de_punta_a_punta(pagina_con_sesion, monkeypatch, png):
     expect(p).to_have_url(re.compile(r"#/trabajo/\w+$"))
     p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
     p.get_by_role("button", name="Sí, facturar").click()
-    expect(p.locator(".estado")).to_have_text("completado", timeout=60000)
+    expect(p.locator(".estado")).to_have_attribute("data-estado", "completado", timeout=60000)
 
 
 def test_extraccion_fallida_permite_captura_manual(pagina_con_sesion, monkeypatch, png):
@@ -184,7 +185,7 @@ def test_trabajo_terminado_no_consulta_mas(app_url, pagina_con_sesion):
     p = pagina_con_sesion
     llamadas = _llamadas_a_facturas(p)
     p.goto(f"{app_url}#/trabajo/{tid}")
-    expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
+    expect(p.locator(".estado")).to_have_attribute("data-estado", "cancelado", timeout=60000)
     n = len(llamadas)
     p.wait_for_timeout(3500)
     assert len([u for u in llamadas[n:] if u.endswith(tid)]) == 0
@@ -195,7 +196,7 @@ def test_cancelar_desde_la_web(app_url, pagina_con_sesion):
     p = pagina_con_sesion
     p.goto(f"{app_url}#/trabajo/{tid}")
     p.get_by_role("button", name="Cancelar trabajo").click()
-    expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
+    expect(p.locator(".estado")).to_have_attribute("data-estado", "cancelado", timeout=60000)
     expect(p.get_by_role("button", name="Cancelar trabajo")).to_be_hidden()
 
 
@@ -225,7 +226,7 @@ def test_editar_perfil_aplica_a_la_siguiente_factura(app_url, pagina_con_sesion,
     expect(p.get_by_role("button", name="Continuar")).to_be_visible(timeout=60000)
     expect(p.locator(".diferencias")).to_contain_text("CLUB DE PADEL SA DE CV")
     p.get_by_role("button", name="Cancelar", exact=True).click()
-    expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
+    expect(p.locator(".estado")).to_have_attribute("data-estado", "cancelado", timeout=60000)
 
 
 def test_perfil_sin_base_muestra_503(app_url, pagina_con_sesion):
@@ -323,7 +324,7 @@ def test_doble_clic_en_si_facturar_manda_una_respuesta(app_url, pagina_con_sesio
     p.goto(f"{app_url}#/trabajo/{tid}")
     p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
     p.get_by_role("button", name="Sí, facturar").dblclick()
-    expect(p.locator(".estado").first).to_have_text("completado", timeout=60000)
+    expect(p.locator(".estado")).to_have_attribute("data-estado", "completado", timeout=60000)
     assert len(posts) == 1
 
 
@@ -370,3 +371,38 @@ def test_foco_al_titulo_al_cambiar_de_pantalla(pagina_con_sesion):
     p = pagina_con_sesion
     p.get_by_role("link", name="Datos fiscales").click()
     expect(p.get_by_role("heading", level=1)).to_be_focused()
+
+
+# ------------------------------------------------------------------ pantalla de trabajo
+
+def test_pasos_y_cuenta_regresiva(app_url, pagina_con_sesion):
+    tid = _trabajo_por_api("9906400000000000000204")
+    p = pagina_con_sesion
+    try:
+        p.goto(f"{app_url}#/trabajo/{tid}")
+        expect(p.locator('[data-paso="1"]')).to_have_class(re.compile("actual"), timeout=60000)
+        expect(p.locator('[data-paso="0"]')).to_have_class(re.compile("hecho"))
+        t = main.gestor.obtener(tid)
+        t.pregunta["expira_en"] = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(timespec="seconds")
+        p.reload()
+        expect(p.locator(".reloj")).to_contain_text(re.compile(r"\b([0-4]:\d\d|5:00)\b"))
+    finally:
+        client.post(f"/facturas/{tid}/cancelar", headers=H)
+    expect(p.locator('[data-paso="1"]')).to_have_class(re.compile("error"), timeout=60000)
+
+
+def test_formato_restante_nunca_negativo(app_url, pagina):
+    pagina.goto(app_url)
+    r = pagina.evaluate("""async () => (await import('/js/vistas/trabajo.js'))
+        .formatoRestante(new Date(Date.now() - 5000).toISOString(), Date.now())""")
+    assert r == "0:00"
+
+
+def test_dialogo_se_cierra_si_la_pregunta_cambia(app_url, pagina_con_sesion):
+    tid = _trabajo_por_api("9906400000000000000205")
+    p = pagina_con_sesion
+    p.goto(f"{app_url}#/trabajo/{tid}")
+    p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
+    expect(p.get_by_role("dialog")).to_be_visible()
+    client.post(f"/facturas/{tid}/cancelar", headers=H)        # otra vía cancela mientras el diálogo está abierto
+    expect(p.get_by_role("dialog")).to_be_hidden(timeout=10000)
