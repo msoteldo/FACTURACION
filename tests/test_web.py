@@ -325,3 +325,27 @@ def test_doble_clic_en_si_facturar_manda_una_respuesta(app_url, pagina_con_sesio
     p.get_by_role("button", name="Sí, facturar").dblclick()
     expect(p.locator(".estado").first).to_have_text("completado", timeout=60000)
     assert len(posts) == 1
+
+
+# ------------------------------------------------------------------ landing
+
+def test_landing(servidor_web, pagina):
+    pagina.goto(servidor_web)
+    expect(pagina.get_by_role("heading", level=1)).to_contain_text("convertido en factura")
+    assert pagina.get_by_role("link", name="Entrar").first.get_attribute("href") == "/app/#/login"
+    expect(pagina.locator("#demo")).to_have_class(re.compile("reproducir"))
+
+
+def test_enlace_viejo_redirige(servidor_web, pagina_con_sesion):
+    # Con sesión, el enlace viejo abre el trabajo en la app (sin sesión, la app pide entrar y luego vuelve).
+    pagina_con_sesion.goto(servidor_web + "#/trabajo/abc123")
+    expect(pagina_con_sesion).to_have_url(re.compile(r"/app/#/trabajo/abc123$"))
+
+
+def test_landing_con_movimiento_reducido(servidor_web, _navegador):
+    ctx = _navegador.new_context(reduced_motion="reduce")
+    p = ctx.new_page()
+    p.goto(servidor_web)
+    expect(p.get_by_text("Factura enviada a tu correo")).to_be_visible()
+    assert p.eval_on_selector(".recibo", "e => getComputedStyle(e).animationName") == "none"
+    ctx.close()
