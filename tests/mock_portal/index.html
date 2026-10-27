@@ -13,7 +13,10 @@ const app = document.getElementById("app");
 // portal real, donde la pantalla de datos fiscales no estaba en /address).
 function ir(ruta) {
   if (estado.sinRutas) estado.vista = ruta; else history.pushState({}, "", ruta);
-  setTimeout(render, 300);
+  // En /payment y /invoiceSelection el portal real tarda en dibujar los controles.
+  const lento = estado.lento && (ruta === "/payment" || ruta === "/invoiceSelection");
+  if (lento) app.innerHTML = "<p>Cargando…</p>";
+  setTimeout(render, lento ? 4000 : 300);
 }
 
 function modal(texto, alContinuar) {
@@ -106,6 +109,7 @@ function render() {
       estado.efectivo = tc.startsWith("55");  // pagado en efectivo: el portal no pide forma de pago
       estado.entregaReal = tc.startsWith("44");   // entrega como el portal real (oct-2026): sin id method_email_radio
       estado.sinCorreo = tc.startsWith("33");     // entrega sin opción de correo
+      estado.lento = tc.startsWith("22");         // como el portal real: la URL cambia antes de que aparezcan los controles
       ir("/address");
     };
   } else if (ruta === "/address") {

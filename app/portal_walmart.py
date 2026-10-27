@@ -57,6 +57,10 @@ OPCIONES_ENTREGA = {
     "descarga": ("#method_pdf_radio", re.compile(r"^\s*pdf\s*$", re.I), "PDF"),
 }
 
+# El portal cambia la URL (/payment, /invoiceSelection) antes de dibujar sus controles:
+# hay que esperarlos en vez de buscarlos una sola vez.
+ESPERA_CONTROLES_MS = 15000
+
 # Avisos emergentes: el conocido (#popup_btn_accept) y cualquier "Aceptar" dentro del overlay.
 SEL_AVISO = "#popup_btn_accept, #popup_overlay button:has-text('Aceptar')"
 
@@ -421,9 +425,17 @@ class FlujoWalmart:
                     datos[etiqueta] = texto
         return datos
 
+    def esperar_control(self, selector):
+        """Espera a que el control sea visible; False si no aparece a tiempo."""
+        try:
+            self.page.locator(selector).first.wait_for(state="visible", timeout=ESPERA_CONTROLES_MS)
+            return True
+        except Exception:
+            return False
+
     def pantalla_pago(self, sol):
         sel = self.page.locator("select")
-        if not sel.count():
+        if not self.esperar_control("select"):
             self.fallar("No encontré el select de forma de pago.", "06_pago_error")
         try:
             sel.first.select_option(value=sol.forma_pago)
@@ -458,6 +470,7 @@ class FlujoWalmart:
         return "; ".join(radios) or "ninguna"
 
     def pantalla_entrega(self, sol):
+        self.esperar_control("input[type=radio]")
         como = self.elegir_entrega(sol.metodo_entrega)
         if not como:
             nombre = OPCIONES_ENTREGA[sol.metodo_entrega][2]
