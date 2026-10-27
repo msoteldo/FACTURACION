@@ -47,7 +47,7 @@ RE_NO_TOCAR = re.compile(r"reenv|enviar|correo|e-?mail|cancel|elimin|borrar|refa
 PANTALLAS = {
     "datos fiscales": ("/address", "[name='Razón Social']"),
     "forma de pago": ("/payment", "select:has(option[value='28'])"),
-    "entrega de la factura": ("/invoiceSelection", "#invoice_form_btn_submit, #method_pdf_radio"),
+    "entrega de la factura": ("/invoiceSelection", "#method_pdf_radio, #method_email_radio, input[type=radio]"),
 }
 
 # Opciones de entrega: primero el id conocido; si el portal lo cambió, el texto de la opción.
@@ -214,16 +214,25 @@ class FlujoWalmart:
         return self.pantalla_siguiente((nombre,), timeout_ms) == nombre
 
     def pantalla_siguiente(self, nombres, timeout_ms=10000):
-        """Espera a que aparezca cualquiera de las pantallas `nombres`; devuelve cuál, o None."""
+        """Espera a que aparezca cualquiera de las pantallas `nombres`; devuelve cuál, o None.
+
+        Manda el contenido (un control propio de la pantalla): el portal real a veces muestra
+        una URL que no corresponde a lo que se ve. La URL solo decide si al agotarse el tiempo
+        ningún contenido apareció."""
         fin = time.time() + timeout_ms / 1000
         while True:
             for nombre in nombres:
-                ruta, selector = PANTALLAS[nombre]
-                if ruta.lower() in self.page.url.lower():
-                    return nombre
+                _, selector = PANTALLAS[nombre]
                 if self.page.locator(selector).locator("visible=true").count():
+                    self.ui.evento(f"Pantalla '{nombre}' reconocida por su contenido.")
                     return nombre
-            if "/formerror" in self.page.url.lower() or time.time() > fin:
+            if "/formerror" in self.page.url.lower():
+                return None
+            if time.time() > fin:
+                for nombre in nombres:
+                    if PANTALLAS[nombre][0].lower() in self.page.url.lower():
+                        self.ui.evento(f"Pantalla '{nombre}' reconocida solo por la URL ({self.page.url}).")
+                        return nombre
                 return None
             self.page.wait_for_timeout(500)
 

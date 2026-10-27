@@ -263,3 +263,14 @@ def test_portal_lento_espera_los_controles_de_pago_y_entrega():
     assert t["estado"] == "esperando_respuesta", t["error"]
     assert t["pregunta"]["datos"]["forma_pago"] == "Tarjeta de débito"
     client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+
+
+def test_pantalla_reconocida_por_su_contenido_y_no_por_la_url():
+    # El portal real a veces muestra una URL que no corresponde a la pantalla: la forma de pago
+    # se reconocía como entrega y fallaba con "No encontré la opción de entrega por correo".
+    r = client.post("/facturas", headers=H, json={"tc": "1106400000000000000001", "tr": "03388",
+                                                   "uso_cfdi": "G01", "forma_pago": "28", "metodo_entrega": "email"})
+    t = esperar_estado(r.json()["id"], {"esperando_respuesta", "error"}, timeout=90)
+    assert t["estado"] == "esperando_respuesta", t["error"]
+    assert t["pregunta"]["datos"]["forma_pago"] == "Tarjeta de débito"
+    client.post(f"/facturas/{t['id']}/cancelar", headers=H)
