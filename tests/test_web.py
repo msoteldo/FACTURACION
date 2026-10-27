@@ -233,3 +233,33 @@ def test_perfil_sin_base_muestra_503(servidor_web, pagina_con_sesion):
     p.goto(f"{servidor_web}#/perfil")
     p.get_by_role("button", name="Guardar").click()
     expect(p.get_by_text("Configura DATABASE_URL")).to_be_visible()
+
+
+# ------------------------------------------------------------------ correcciones de la revisión final
+
+def test_docs_sigue_funcionando_sin_csp_restrictiva():
+    for ruta in ("/docs", "/redoc"):
+        r = client.get(ruta)
+        assert r.status_code == 200
+        assert "default-src 'self'" not in r.headers.get("content-security-policy", "")
+        assert r.headers["x-frame-options"] == "DENY"
+    assert client.get("/").headers["content-security-policy"] == CSP
+
+
+def test_barra_oculta_en_login(servidor_web, pagina):
+    pagina.goto(servidor_web)
+    expect(pagina).to_have_url(re.compile("#/login$"))
+    expect(pagina.locator("#barra")).to_be_hidden()
+
+
+def test_forma_de_pago_no_leida_obliga_a_elegir(pagina_con_sesion, monkeypatch, png):
+    leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": "9906400000000000000107",
+                       "forma_pago_sat_sugerida": None})
+    p = pagina_con_sesion
+    p.get_by_label("Foto del ticket").set_input_files(png)
+    forma = p.get_by_label("Forma de pago")
+    expect(forma).to_have_value("")
+    expect(forma).to_have_class(re.compile("revisar"))
+    p.get_by_role("button", name="Facturar", exact=True).click()
+    p.wait_for_timeout(500)
+    expect(p).to_have_url(re.compile("#/nueva$"))

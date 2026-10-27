@@ -29,6 +29,9 @@ def iniciar(url):
     if url.startswith("sqlite"):
         # Los trabajos corren en hilos: la misma conexión puede usarse desde otro hilo.
         opciones["connect_args"] = {"check_same_thread": False}
+    elif url.startswith("postgresql"):
+        # Sin esto, una base inalcanzable deja cada petición colgada ~2 min antes del 503.
+        opciones["connect_args"] = {"connect_timeout": 10}
     # Neon suspende la base tras unos minutos sin uso y corta las conexiones abiertas;
     # pool_pre_ping las detecta antes de usarlas.
     _motor = create_engine(url, **opciones)

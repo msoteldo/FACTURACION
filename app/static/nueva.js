@@ -46,6 +46,9 @@ function opciones(lista, elegido) {
   return lista.map(([valor, texto]) => el("option", { value: valor, selected: valor === elegido }, texto));
 }
 
+// Campos que no se deben suponer: si Gemini no los leyó, hay que elegirlos a mano.
+const SIN_VALOR_POR_DEFECTO = ["forma_pago"];
+
 function textoDeError(e) {
   // 422 de FastAPI: lista de {loc, msg}; se muestra campo por campo.
   if (Array.isArray(e.detalle)) return e.detalle.map((d) => `${d.loc[d.loc.length - 1]}: ${d.msg}`).join(" · ");
@@ -121,10 +124,12 @@ export function montar(contenedor) {
     }
     vaciar(campos, definicion.map(([id, etiqueta, tipo, lista, origen, confianza]) => {
       const valor = origen && leido[origen] != null ? String(leido[origen]) : "";
-      const revisar = confianza && ["media", "baja"].includes(leido[confianza]);
+      const sinLeer = SIN_VALOR_POR_DEFECTO.includes(id) && !valor;
+      const revisar = sinLeer || (confianza && ["media", "baja"].includes(leido[confianza]));
       const control = tipo === "select"
-        ? el("select", { id: `campo-${id}`, name: id, clase: revisar ? "revisar" : undefined },
-            opciones(lista, valor || lista[0][0]))
+        ? el("select", { id: `campo-${id}`, name: id, required: true, clase: revisar ? "revisar" : undefined },
+            sinLeer ? el("option", { value: "", selected: true }, "Elige…") : null,
+            opciones(lista, sinLeer ? null : (valor || lista[0][0])))
         : el("input", { id: `campo-${id}`, name: id, type: tipo, value: valor, required: true,
             step: tipo === "number" ? "0.01" : undefined, clase: revisar ? "revisar" : undefined });
       return el("div", {}, el("label", { for: `campo-${id}` }, etiqueta), control);

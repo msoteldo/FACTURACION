@@ -8,7 +8,7 @@ import hmac
 import secrets
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -44,32 +44,56 @@ def limpiar_clave(valor):
     return (valor or "").strip().strip("\"'")
 
 
-class LimiteIntentos:
-    """Cuenta logins fallidos por IP en una ventana deslizante (en memoria: un solo worker)."""
+def ip_cliente(request):
+    """IP para el límite de intentos: la última de X-Forwarded-For, que es la que agrega el
+    proxy de Render. Las anteriores las manda el cliente y podría inventarlas para brincarse
+    el límite (uvicorn con --forwarded-allow-ips='*' toma la primera)."""
+    reenviada = request.headers.get("x-forwarded-for", "")
+    ultima = reenviada.split(",")[-1].strip()
+    return ultima or (request.client.host if request.client else "?")
 
-    def __init__(self, maximo=5, ventana_s=60):
+
+class LimiteIntentos:
+    """Cuenta logins fallidos por IP y en total, en una ventana deslizante (en memoria: un
+    solo worker). El tope global frena a quien rote IPs; con un solo usuario no estorba."""
+
+    def __init__(self, maximo=5, ventana_s=60, maximo_global=20):
         self.maximo = maximo
         self.ventana_s = ventana_s
-        self._fallos = defaultdict(deque)
+        self.maximo_global = maximo_global
+        self._fallos = {}
+        self._global = deque()
         self._lock = threading.Lock()
 
-    def _vigentes(self, ip, ahora):
-        fallos = self._fallos[ip]
+    def _purgar(self, fallos, ahora):
         while fallos and fallos[0] <= ahora - self.ventana_s:
             fallos.popleft()
-        return fallos
+
+    def _limpiar(self, ahora):
+        # Se barren todas las IPs: son pocas, porque el tope global corta los fallos en cada
+        # ventana, y así no se acumulan en memoria las que ya no intentan.
+        self._purgar(self._global, ahora)
+        for ip in list(self._fallos):
+            self._purgar(self._fallos[ip], ahora)
+            if not self._fallos[ip]:
+                del self._fallos[ip]
 
     def bloqueado(self, ip, ahora):
         with self._lock:
-            return len(self._vigentes(ip, ahora)) >= self.maximo
+            self._limpiar(ahora)
+            return (len(self._fallos.get(ip, ())) >= self.maximo
+                    or len(self._global) >= self.maximo_global)
 
     def fallo(self, ip, ahora):
         with self._lock:
-            self._vigentes(ip, ahora).append(ahora)
+            self._limpiar(ahora)
+            self._fallos.setdefault(ip, deque()).append(ahora)
+            self._global.append(ahora)
 
     def reiniciar(self):
         with self._lock:
             self._fallos.clear()
+            self._global.clear()
 
 
 limite = LimiteIntentos()
@@ -88,7 +112,7 @@ def crear_router(obtener_api_key):
         api_key = obtener_api_key()
         if not api_key:
             raise HTTPException(503, "El servidor no tiene API_KEY configurada; se rechazan todas las solicitudes.")
-        ip = request.client.host if request.client else "?"
+        ip = ip_cliente(request)
         ahora = time.time()
         if limite.bloqueado(ip, ahora):
             raise HTTPException(429, "Demasiados intentos; espera un minuto.")

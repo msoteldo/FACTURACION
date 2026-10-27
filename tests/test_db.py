@@ -63,3 +63,15 @@ def test_migracion_coincide_con_modelo(tmp_path, monkeypatch):
 @pytest.mark.skipif(not os.environ.get("TEST_DATABASE_URL"), reason="sin Postgres de prueba")
 def test_migracion_en_postgres(monkeypatch):
     _migrar_y_comparar(monkeypatch, os.environ["TEST_DATABASE_URL"])
+
+
+def test_postgres_con_timeout_de_conexion(monkeypatch):
+    capturado = {}
+
+    def falso(url, **kwargs):
+        capturado.update(kwargs)
+        return type("Motor", (), {"dispose": lambda self: None})()
+    monkeypatch.setattr(db, "create_engine", falso)
+    db.iniciar("postgresql://u:p@h/db")
+    db.cerrar()
+    assert capturado["connect_args"]["connect_timeout"] == 10

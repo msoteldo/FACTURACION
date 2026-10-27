@@ -91,10 +91,17 @@ HEADERS_SEGURIDAD = {
 }
 
 
+# Swagger UI y ReDoc cargan su JS desde un CDN con un script inline: con la CSP de la
+# webapp se verían en blanco. A esas páginas solo se les quita la CSP.
+RUTAS_DOCS = {"/docs", "/docs/oauth2-redirect", "/redoc"}
+
+
 @app.middleware("http")
 async def headers_de_seguridad(request: Request, call_next):
     respuesta = await call_next(request)
     for nombre, valor in HEADERS_SEGURIDAD.items():
+        if nombre == "Content-Security-Policy" and request.url.path in RUTAS_DOCS:
+            continue
         respuesta.headers.setdefault(nombre, valor)
     return respuesta
 

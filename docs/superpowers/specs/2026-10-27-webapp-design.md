@@ -55,7 +55,7 @@ Todo corre en el mismo servicio de Render y en el mismo proceso de FastAPI. No h
 - **Cookie:** `HttpOnly`, `SameSite=Strict`, con `Max-Age` de 12 horas. `Secure` se pone cuando el esquema de la petición es `https`.
 - **Token:** `"<expiración_unix>.<hex de HMAC-SHA256(clave, expiración)>"`, donde `clave = HMAC-SHA256(API_KEY, "sesion-web")`. Al cambiar la `API_KEY`, todas las sesiones dejan de servir. No se agregan dependencias.
 - **Logout:** `DELETE /sesion` borra la cookie. No hay revocación del lado del servidor; para un solo usuario es aceptable.
-- **Límite de intentos:** 5 fallos por IP en 60 s hacen que `POST /sesion` responda 429. El contador vive en memoria.
+- **Límite de intentos:** 5 fallos por IP en 60 s, o 20 fallos en total en 60 s, hacen que `POST /sesion` responda 429. La IP es la última de `X-Forwarded-For` (la que agrega el proxy de Render); las anteriores las controla el cliente. El contador vive en memoria.
 - **Rutas protegidas:** aceptan el header `X-API-Key` (curl, pruebas actuales) **o** la cookie. Con cookie, los métodos que cambian algo (`POST`, `PUT`, `DELETE`) exigen el header `X-Requested-With: fetch`; si falta, responden 403.
 - **Sin base de datos:** verificar la cookie no consulta la base.
 
@@ -123,6 +123,8 @@ Todo corre en el mismo servicio de Render y en el mismo proceso de FastAPI. No h
 - `Content-Security-Policy: default-src 'self'; img-src 'self' blob:; frame-ancestors 'none'`
 - `X-Frame-Options: DENY`
 - `X-Content-Type-Options: nosniff`
+
+Excepción: `/docs`, `/docs/oauth2-redirect` y `/redoc` no llevan la CSP, porque Swagger UI y ReDoc cargan su JS desde un CDN con un script inline. Sí llevan los otros dos headers.
 
 ## Despliegue
 

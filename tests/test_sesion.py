@@ -91,3 +91,31 @@ def test_cookie_de_otra_api_key_no_sirve(monkeypatch):
 
 def test_header_sigue_funcionando():
     assert client.get("/configuracion", headers=H).status_code == 200
+
+
+def test_limite_no_se_brinca_rotando_x_forwarded_for():
+    # Igual que en Render: uvicorn con --proxy-headers --forwarded-allow-ips='*'.
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+    c = TestClient(ProxyHeadersMiddleware(main.app, trusted_hosts="*"))
+    for i in range(5):
+        r = c.post("/sesion", json={"password": "x"},
+                   headers={"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"})
+        assert r.status_code == 401
+    r = c.post("/sesion", json={"password": "clave-de-prueba"},
+               headers={"X-Forwarded-For": "10.0.0.99, 203.0.113.7"})
+    assert r.status_code == 429
+
+
+def test_limite_global_aunque_cambie_la_ip():
+    c = TestClient(main.app)
+    for i in range(sesion.limite.maximo_global):
+        c.post("/sesion", json={"password": "x"}, headers={"X-Forwarded-For": f"198.51.100.{i}"})
+    r = c.post("/sesion", json={"password": "clave-de-prueba"}, headers={"X-Forwarded-For": "192.0.2.1"})
+    assert r.status_code == 429
+
+
+def test_limite_olvida_ips_viejas():
+    limite = sesion.LimiteIntentos(maximo=5, ventana_s=60)
+    limite.fallo("1.1.1.1", ahora=0)
+    assert not limite.bloqueado("2.2.2.2", ahora=100)
+    assert "1.1.1.1" not in limite._fallos and "2.2.2.2" not in limite._fallos

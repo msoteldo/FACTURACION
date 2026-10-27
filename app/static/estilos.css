@@ -14,6 +14,9 @@
 
 * { box-sizing: border-box; }
 
+/* Sin esto, una clase con display (p. ej. .barra) le gana al atributo hidden. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
