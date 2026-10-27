@@ -23,6 +23,13 @@ function resumenParaConfirmar(datos) {
   return ["¿Facturar? Este paso no se puede deshacer.", "", ...lineas].join("\n");
 }
 
+function diferencias(datos) {
+  // {"RAZON_SOCIAL": {"esperado": "...", "en_portal": "..."}}: lo configurado contra lo del portal.
+  const filas = Object.entries(datos || {}).map(([campo, d]) => el("li", {},
+    el("strong", {}, campo), ` · tus datos: ${d.esperado ?? "—"} · portal: ${d.en_portal ?? "(vacío)"}`));
+  return filas.length ? el("ul", { clase: "diferencias" }, filas) : null;
+}
+
 function beep() {
   try {
     const ctx = new AudioContext();
@@ -149,6 +156,7 @@ export function montar(contenedor, id) {
     vaciar(pregunta, el("div", { clase: "tarjeta pregunta" },
       el("h2", {}, "El trabajo necesita tu respuesta"),
       el("p", { clase: "texto-pregunta" }, p.texto),
+      p.tipo === "revisar_direccion" ? diferencias(p.datos) : null,
       p.captura ? el("img", { src: urlArchivo(t.id, p.captura), alt: "Captura del portal", clase: "captura" }) : null,
       reloj, botones));
   }

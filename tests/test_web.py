@@ -197,3 +197,39 @@ def test_cancelar_desde_la_web(servidor_web, pagina_con_sesion):
     p.get_by_role("button", name="Cancelar trabajo").click()
     expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
     expect(p.get_by_role("button", name="Cancelar trabajo")).to_be_hidden()
+
+
+# ------------------------------------------------------------------ datos fiscales
+
+def test_editar_perfil_aplica_a_la_siguiente_factura(servidor_web, pagina_con_sesion, base_sqlite,
+                                                     monkeypatch, png):
+    p = pagina_con_sesion
+    p.goto(f"{servidor_web}#/perfil")
+    expect(p.get_by_text("Guarda para poder editarlos aquí")).to_be_visible()
+    expect(p.get_by_label("RFC")).to_have_value("CPA010101AB1")
+    p.get_by_label("CP").fill("1234")
+    p.get_by_role("button", name="Guardar").click()
+    expect(p.locator("#error-cp")).not_to_be_empty()
+    p.get_by_label("CP").fill("01000")
+    p.get_by_label("Razón social").fill("CLUB DE PADEL SA DE CV")
+    p.get_by_role("button", name="Guardar").click()
+    expect(p.get_by_text("Aplica a las facturas nuevas")).to_be_visible()
+    expect(p.locator("#error-cp")).to_be_empty()
+
+    tc = "9906400000000000000106"
+    leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": tc})
+    p.goto(f"{servidor_web}#/nueva")
+    p.get_by_label("Foto del ticket").set_input_files(png)
+    expect(p.get_by_label("TC", exact=True)).to_have_value(tc)
+    p.get_by_role("button", name="Facturar", exact=True).click()
+    expect(p.get_by_role("button", name="Continuar")).to_be_visible(timeout=60000)
+    expect(p.locator(".diferencias")).to_contain_text("CLUB DE PADEL SA DE CV")
+    p.get_by_role("button", name="Cancelar", exact=True).click()
+    expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
+
+
+def test_perfil_sin_base_muestra_503(servidor_web, pagina_con_sesion):
+    p = pagina_con_sesion
+    p.goto(f"{servidor_web}#/perfil")
+    p.get_by_role("button", name="Guardar").click()
+    expect(p.get_by_text("Configura DATABASE_URL")).to_be_visible()
