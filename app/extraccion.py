@@ -12,32 +12,43 @@ import requests
 
 URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
-PROMPT = """Eres un extractor de datos de tickets de compra de Sam's Club / Walmart México.
-Analiza la imagen del ticket y devuelve SOLO un JSON (sin texto antes ni después,
-sin ``` de markdown) con esta forma exacta:
+PROMPT = """Eres un extractor de datos de tickets de compra en México (Sam's Club / Walmart,
+OXXO u otros). Analiza la imagen del ticket y devuelve SOLO un JSON (sin texto antes ni
+después, sin ``` de markdown) con esta forma exacta:
 
 {
   "comercio": string,
+  "comercio_clave": "walmart" | "oxxo" | "otro",
   "tienda_numero": string o null,
   "fecha": "YYYY-MM-DD" o null,
   "hora": "HH:MM" o null,
   "tc_numero_ticket": string o null,
   "tr_numero_transaccion": string o null,
+  "oxxo_folio_venta": string o null,
+  "oxxo_id_venta": string o null,
   "subtotal": number o null,
   "descuento": number o null,
   "iva_monto": number o null,
   "total": number,
   "forma_de_pago": "credito" | "debito" | "monedero" | "efectivo" | "mixto" | "desconocido",
-  "confianza_tc": "alta" | "media" | "baja",
-  "confianza_tr": "alta" | "media" | "baja",
+  "confianza_tc": "alta" | "media" | "baja" | null,
+  "confianza_tr": "alta" | "media" | "baja" | null,
+  "confianza_id_venta": "alta" | "media" | "baja" | null,
   "advertencias": [string]
 }
 
 Reglas importantes:
-- El TC (número de ticket) y TR (número de transacción) suelen estar juntos, cerca de
-  "TDA#", "OP#", "TE#" y "TR#". Léelos con mucho cuidado, dígito por dígito; son la parte
-  más importante y más propensa a errores. Si algún dígito no es 100% legible, indícalo
-  en "advertencias" y baja la "confianza" correspondiente a "media" o "baja".
+- "comercio_clave": "walmart" para Walmart, Sam's Club, Bodega Aurrera, Superama o Walmart
+  Express; "oxxo" si el ticket es de OXXO (Cadena Comercial Oxxo); "otro" en cualquier otro caso.
+- Walmart/Sam's: el TC (número de ticket) y TR (número de transacción) suelen estar juntos,
+  cerca de "TDA#", "OP#", "TE#" y "TR#". Léelos dígito por dígito; si algún dígito no es 100%
+  legible, dilo en "advertencias" y baja "confianza_tc"/"confianza_tr". Para OXXO déjalos en
+  null (y sus confianzas en null).
+- OXXO: "oxxo_folio_venta" es el número después de "Fol_Vta:" (solo dígitos) y "oxxo_id_venta"
+  el texto después de "ID=" (letras MAYÚSCULAS y dígitos, sin espacios). El ID mezcla letras y
+  números: revisa con cuidado O vs 0, I vs 1, S vs 5, B vs 8, Z vs 2 y G vs 6. Si algún carácter
+  es dudoso, di cuál en "advertencias" y baja "confianza_id_venta". La fecha de OXXO viene como
+  DD/MM/AAAA. Para Walmart deja los campos oxxo_* en null.
 - No inventes datos: si algo no se puede leer, usa null y explica por qué en "advertencias".
 - "total" es el único campo obligatorio; si no lo puedes leer con seguridad, ponlo en 0
   y explica en "advertencias".
@@ -45,7 +56,7 @@ Reglas importantes:
   cuadra, dilo en "advertencias" en vez de forzar los números.
 """
 
-# Forma de pago del ticket -> clave SAT que espera el portal de Walmart.
+# Forma de pago del ticket -> clave SAT del catálogo c_FormaPago.
 FORMA_PAGO_SAT = {"efectivo": "01", "credito": "04", "debito": "28", "monedero": "05"}
 
 REINTENTABLES = {429, 500, 503}
@@ -114,23 +125,41 @@ def _parsear(data):
 def validar(ticket):
     """Revisiones baratas sobre lo extraído; agrega advertencias en vez de corregir."""
     advertencias = list(ticket.get("advertencias") or [])
-    for campo, nombre in (("tc_numero_ticket", "TC#"), ("tr_numero_transaccion", "TR#")):
-        valor = ticket.get(campo)
-        if valor is None:
-            advertencias.append(f"No se leyó el {nombre}; captúralo a mano.")
-            continue
-        limpio = re.sub(r"\s", "", str(valor))
-        ticket[campo] = limpio
-        if not limpio.isdigit():
-            advertencias.append(f"El {nombre} '{limpio}' contiene caracteres que no son dígitos.")
+    clave = ticket.get("comercio_clave")
+    if clave not in ("walmart", "oxxo", "otro"):
+        clave = "oxxo" if "oxxo" in str(ticket.get("comercio", "")).lower() else "walmart"
+    ticket["comercio_clave"] = clave
+
+    if clave == "oxxo":
+        folio = re.sub(r"\s", "", str(ticket.get("oxxo_folio_venta") or ""))
+        id_venta = re.sub(r"\s", "", str(ticket.get("oxxo_id_venta") or "")).upper()
+        ticket["oxxo_folio_venta"], ticket["oxxo_id_venta"] = folio or None, id_venta or None
+        if not folio:
+            advertencias.append("No se leyó el folio de venta (Fol_Vta); captúralo a mano.")
+        elif not re.fullmatch(r"\d{1,9}", folio):
+            advertencias.append(f"El folio de venta '{folio}' debe ser de hasta 9 dígitos.")
+        if not id_venta:
+            advertencias.append("No se leyó el ID de venta (ID=); captúralo a mano.")
+        elif not re.fullmatch(r"[A-Z0-9]{1,12}", id_venta):
+            advertencias.append(f"El ID de venta '{id_venta}' debe ser de hasta 12 letras o dígitos.")
+        if not ticket.get("fecha"):
+            advertencias.append("No se leyó la fecha de venta; el portal de OXXO la exige.")
+        confianzas = [ticket.get("confianza_id_venta")]
+    else:
+        for campo, nombre in (("tc_numero_ticket", "TC#"), ("tr_numero_transaccion", "TR#")):
+            valor = ticket.get(campo)
+            if valor is None:
+                advertencias.append(f"No se leyó el {nombre}; captúralo a mano.")
+                continue
+            limpio = re.sub(r"\s", "", str(valor))
+            ticket[campo] = limpio
+            if not limpio.isdigit():
+                advertencias.append(f"El {nombre} '{limpio}' contiene caracteres que no son dígitos.")
+        confianzas = [ticket.get("confianza_tc"), ticket.get("confianza_tr")]
 
     ticket["advertencias"] = advertencias
     ticket["forma_pago_sat_sugerida"] = FORMA_PAGO_SAT.get(ticket.get("forma_de_pago"))
-    ticket["requiere_revision"] = bool(
-        advertencias
-        or ticket.get("confianza_tc") != "alta"
-        or ticket.get("confianza_tr") != "alta"
-    )
+    ticket["requiere_revision"] = bool(advertencias or any(c != "alta" for c in confianzas))
     return ticket
 
 

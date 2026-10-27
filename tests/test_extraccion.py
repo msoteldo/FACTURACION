@@ -72,3 +72,34 @@ def test_endpoint_extraer(monkeypatch):
     assert r.status_code == 200 and r.json()["tr_numero_transaccion"] == "03388"
     r = c.post("/tickets/extraer", headers=H, files={"foto": ("t.txt", b"x", "text/plain")})
     assert r.status_code == 415
+
+
+TICKET_OXXO = {
+    "comercio": "OXXO", "comercio_clave": "oxxo", "fecha": "2026-10-09",
+    "oxxo_folio_venta": "1154003", "oxxo_id_venta": "10mon50rcs1", "total": 270.0,
+    "forma_de_pago": "debito", "confianza_id_venta": "alta", "advertencias": [],
+}
+
+
+def test_oxxo_valida_folio_e_id(monkeypatch):
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(TICKET_OXXO)))
+    r = extraccion.leer_ticket("k", "m", b"img", "image/jpeg")
+    assert r["comercio_clave"] == "oxxo"
+    assert r["oxxo_id_venta"] == "10MON50RCS1"  # en mayúsculas, como lo pide el portal
+    assert r["forma_pago_sat_sugerida"] == "28"
+    assert r["requiere_revision"] is False
+    assert not any("TC#" in a for a in r["advertencias"])  # no se exigen campos de Walmart
+
+
+def test_oxxo_id_dudoso_requiere_revision(monkeypatch):
+    t = dict(TICKET_OXXO, confianza_id_venta="media", oxxo_folio_venta="11540O3", fecha=None)
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(t)))
+    r = extraccion.leer_ticket("k", "m", b"img", "image/jpeg")
+    assert r["requiere_revision"] is True
+    assert any("folio" in a for a in r["advertencias"]) and any("fecha" in a for a in r["advertencias"])
+
+
+def test_sin_comercio_clave_se_deduce(monkeypatch):
+    t = dict(TICKET)
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(t)))
+    assert extraccion.leer_ticket("k", "m", b"img", "image/jpeg")["comercio_clave"] == "walmart"
