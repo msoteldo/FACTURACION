@@ -85,6 +85,7 @@
 .subtitulo { color: var(--soft); margin: 6px 0 22px; }
 .nueva { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 24px; align-items: start; }
 @media (max-width: 900px) { .nueva { grid-template-columns: 1fr; } }
+.zona-contenedor { position: relative; }
 .zona {
   position: relative; border: 1.5px dashed var(--line); border-radius: var(--r-lg); background: var(--surface); min-height: 320px;
   display: grid; place-items: center; text-align: center; padding: 20px; overflow: hidden; cursor: pointer;

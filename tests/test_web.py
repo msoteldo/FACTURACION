@@ -453,3 +453,88 @@ def test_flujo_completo_con_movimiento_reducido(app_url, _navegador, monkeypatch
         assert dialogos == []
     finally:
         ctx.close()
+
+
+# ------------------------------------------------------------------ correcciones de la revisión final (TicketIA)
+
+def _a_la_pregunta(p, app_url, tc):
+    tid = _trabajo_por_api(tc)
+    p.goto(f"{app_url}#/trabajo/{tid}")
+    expect(p.get_by_role("button", name="Facturar", exact=True)).to_be_visible(timeout=60000)
+    return tid
+
+
+def test_dialogo_atrapa_foco_y_escape_tras_clic_en_el_texto(app_url, pagina_con_sesion):
+    p = pagina_con_sesion
+    tid = _a_la_pregunta(p, app_url, "9906400000000000000301")
+    posts = []
+    p.on("request", lambda r: r.method == "POST" and r.url.endswith("/respuesta") and posts.append(1))
+    try:
+        p.get_by_role("button", name="Facturar", exact=True).click()
+        dialogo = p.get_by_role("dialog")
+        dialogo.get_by_role("heading").click()
+        p.keyboard.press("Shift+Tab")
+        assert p.evaluate("!!document.activeElement.closest('[role=dialog]')")
+        p.keyboard.press("Escape")
+        expect(dialogo).to_be_hidden()
+        assert posts == []
+    finally:
+        client.post(f"/facturas/{tid}/cancelar", headers=H)
+
+
+def test_doble_clic_en_facturar_deja_el_dialogo_abierto(app_url, pagina_con_sesion):
+    p = pagina_con_sesion
+    tid = _a_la_pregunta(p, app_url, "9906400000000000000302")
+    try:
+        p.get_by_role("button", name="Facturar", exact=True).dblclick()
+        p.wait_for_timeout(400)
+        expect(p.get_by_role("dialog")).to_be_visible()
+    finally:
+        client.post(f"/facturas/{tid}/cancelar", headers=H)
+
+
+def test_regiones_vivas_de_la_pregunta_y_el_estado(app_url, pagina_con_sesion):
+    p = pagina_con_sesion
+    tid = _a_la_pregunta(p, app_url, "9906400000000000000303")
+    try:
+        assert p.locator("[aria-live] .reloj").count() == 0          # el reloj no se anuncia cada segundo
+        expect(p.locator(".reloj")).to_have_attribute("aria-hidden", "true")
+        expect(p.get_by_role("status").filter(has_text="Nueva pregunta")).to_have_count(1)
+        expect(p.locator(".estado")).to_have_attribute("role", "status")
+    finally:
+        client.post(f"/facturas/{tid}/cancelar", headers=H)
+
+
+def test_lectura_vieja_no_pisa_la_foto_nueva(pagina_con_sesion, monkeypatch, png, tmp_path):
+    import time as _t
+    llamadas = []
+
+    def lenta_luego_rapida(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            _t.sleep(3)
+            return {**TICKET_WALMART, "tc_numero_ticket": "1111111111111111"}
+        return {**TICKET_WALMART, "tc_numero_ticket": "2222222222222222"}
+    monkeypatch.setattr(extraccion, "leer_ticket", lenta_luego_rapida)
+    otra = tmp_path / "otra.png"
+    otra.write_bytes(PNG_1X1)
+    p = pagina_con_sesion
+    p.get_by_label("Foto del ticket").set_input_files(png)
+    p.wait_for_timeout(300)
+    p.get_by_label("Foto del ticket").set_input_files(str(otra))
+    expect(p.get_by_label("TC", exact=True)).to_have_value("2222222222222222")
+    p.wait_for_timeout(3500)
+    expect(p.get_by_label("TC", exact=True)).to_have_value("2222222222222222")
+
+
+def test_cambiar_foto_con_teclado_y_fuera_de_la_zona(pagina_con_sesion, monkeypatch, png):
+    leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": "9906400000000000000304"})
+    p = pagina_con_sesion
+    p.get_by_label("Foto del ticket").set_input_files(png)
+    cambiar = p.get_by_role("button", name="Cambiar foto")
+    expect(cambiar).to_be_visible()
+    assert p.evaluate("!document.querySelector('.estado-foto').closest('[role=button]')")
+    with p.expect_file_chooser():
+        cambiar.focus()
+        p.keyboard.press("Enter")
+    expect(p.get_by_text("Arrastra la foto aquí")).to_be_visible()

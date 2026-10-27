@@ -60,6 +60,7 @@ export function montar(contenedor) {
   let leido = {};
   let urlVistaPrevia = null;
   let comercio = "";
+  let lectura = 0;            // cada foto nueva invalida la lectura anterior que siga en curso
 
   // ---- foto
   const foto = el("input", { id: "foto", type: "file", accept: "image/*", clase: "solo-lector", tabindex: "-1",
@@ -71,19 +72,19 @@ export function montar(contenedor) {
   const imagen = el("img", { alt: "Foto del ticket", clase: "foto-imagen" });
   const vistaFoto = el("div", { clase: "foto", hidden: true }, imagen, el("div", { clase: "lector" }));
   const estadoTexto = el("span", {}, "Leyendo con IA…");
-  const cambiar = el("button", { type: "button", clase: "btn sec chico", on: { click: (e) => { e.stopPropagation(); limpiar(); abrir(); } } }, "Cambiar foto");
+  const cambiar = el("button", { type: "button", clase: "btn sec chico", on: { click: () => { limpiar(); abrir(); } } }, "Cambiar foto");
   const estadoFoto = el("div", { clase: "estado-foto", hidden: true, role: "status" },
     el("span", { clase: "estado-foto-texto" }, el("span", { clase: "punto" }), estadoTexto), cambiar);
   const zona = el("div", {
     clase: "zona", role: "button", tabindex: "0", "aria-label": "Subir imagen del ticket",
     on: {
       click: abrir,
-      keydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); } },
+      keydown: (e) => { if (e.target === zona && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrir(); } },
       dragenter: arrastrando, dragover: arrastrando,
       dragleave: () => zona.classList.remove("sobre"),
       drop: (e) => { e.preventDefault(); zona.classList.remove("sobre"); procesar(e.dataTransfer.files[0]); },
     },
-  }, vacia, vistaFoto, estadoFoto);
+  }, vacia, vistaFoto);
   const errorFoto = el("p", { clase: "ayuda error", role: "alert" });
 
   // ---- formulario
@@ -114,7 +115,9 @@ export function montar(contenedor) {
     el("h1", {}, "Nueva factura"),
     el("p", { clase: "subtitulo" }, "Sube la foto del ticket. La IA lo lee y tú revisas antes de facturar."),
     el("div", { clase: "nueva" },
-      el("div", {}, el("label", { for: "foto", clase: "solo-lector" }, "Foto del ticket"), foto, zona, errorFoto),
+      el("div", {}, el("label", { for: "foto", clase: "solo-lector" }, "Foto del ticket"), foto,
+        // La barra de estado va fuera de la zona: un botón dentro de role="button" no se anuncia ni recibe Enter.
+        el("div", { clase: "zona-contenedor" }, zona, estadoFoto), errorFoto),
       formulario),
     consulta);
   pintarCampos();
@@ -129,6 +132,7 @@ export function montar(contenedor) {
   }
 
   function limpiar() {
+    lectura++;
     leido = {};
     foto.value = "";
     vacia.hidden = false;
@@ -157,15 +161,24 @@ export function montar(contenedor) {
     estadoFoto.hidden = false;
     estadoTexto.textContent = "Leyendo con IA…";
     zona.classList.add("leyendo");
+    const mio = ++lectura;
     const datos = new FormData();
     datos.append("foto", archivo);
+    let resultado;
+    let fallo = null;
     try {
-      leido = await api("POST", "/tickets/extraer", datos);
-      estadoTexto.textContent = "Ticket leído";
+      resultado = await api("POST", "/tickets/extraer", datos);
     } catch (e) {
+      fallo = e;
+    }
+    if (mio !== lectura) return;        // ya se eligió otra foto: esta lectura llegó tarde
+    if (fallo) {
       leido = {};
       estadoTexto.textContent = "No se pudo leer";
-      error.textContent = `${textoDeError(e)} Captura los datos a mano.`;
+      error.textContent = `${textoDeError(fallo)} Captura los datos a mano.`;
+    } else {
+      leido = resultado;
+      estadoTexto.textContent = "Ticket leído";
     }
     zona.classList.remove("leyendo");
     elegirComercio(COMERCIOS[leido.comercio_clave] ? leido.comercio_clave : "");

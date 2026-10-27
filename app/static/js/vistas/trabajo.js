@@ -113,12 +113,14 @@ export function montar(contenedor, id) {
   let ultimoResumen = null;
 
   const titulo = el("h1", {}, "Trabajo");
-  const estado = el("span", { clase: "pill estado", "data-estado": "" }, "…");
+  const estado = el("span", { clase: "pill estado", "data-estado": "", role: "status" }, "…");
+  // Lectores de pantalla: se anuncia cada pregunta nueva una vez (no el reloj, que cambia cada segundo).
+  const anuncio = el("p", { clase: "solo-lector", role: "status" });
   const mensaje = el("div", { clase: "mensaje", role: "alert" });
   const pasos = el("ol", { clase: "pasos" }, PASOS.map(([nombre], i) =>
     el("li", { "data-paso": String(i) }, el("span", { clase: "paso-icono" }),
       el("div", {}, el("b", {}, nombre), el("small", {})))));
-  const pregunta = el("div", { clase: "pregunta-zona", "aria-live": "polite" });
+  const pregunta = el("div", { clase: "pregunta-zona" });
   const resultado = el("div");
   const cancelar = el("button", { type: "button", clase: "btn peligro chico", hidden: true, on: { click: cancelarTrabajo } },
     "Cancelar trabajo");
@@ -129,7 +131,7 @@ export function montar(contenedor, id) {
       el("div", {}, titulo, el("code", { clase: "tenue" }, `Trabajo ${id}`)),
       el("div", { clase: "trabajo-acciones" }, estado, cancelar)),
     el("div", { clase: "trabajo-cuerpo" },
-      el("section", { clase: "tarjeta trabajo-principal" }, pasos, mensaje, pregunta, resultado),
+      el("section", { clase: "tarjeta trabajo-principal" }, pasos, mensaje, anuncio, pregunta, resultado),
       el("aside", { clase: "trabajo-lateral" },
         el("section", { clase: "tarjeta" }, el("h2", {}, "Actividad"), eventos),
         el("p", { clase: "tarjeta nota tenue" },
@@ -263,7 +265,7 @@ export function montar(contenedor, id) {
     const [titular] = PREGUNTAS[p.tipo] || ["El trabajo necesita tu respuesta"];
     const tarjeta = el("div", { clase: "pregunta" },
       el("div", { clase: "pregunta-encabezado" }, el("h2", {}, titular),
-        el("div", { clase: "reloj" }, anillo, restante)),
+        el("div", { clase: "reloj", "aria-hidden": "true" }, anillo, restante)),
       el("p", { clase: "texto-pregunta" }, p.texto),
       p.tipo === "revisar_direccion" ? diferencias(p.datos) : resumen(p.datos),
       capturas.length ? el("div", { clase: "capturas" }, capturas.slice(0, 6).map((n) =>
@@ -271,6 +273,7 @@ export function montar(contenedor, id) {
           el("img", { src: urlArchivo(t.id, n), alt: `Captura del portal: ${n}`, loading: "lazy" })))) : null,
       el("div", { clase: "acciones" }, botones));
     vaciar(pregunta, tarjeta);
+    anuncio.textContent = `Nueva pregunta: ${titular}`;
   }
 
   function pintarResultado(t) {
