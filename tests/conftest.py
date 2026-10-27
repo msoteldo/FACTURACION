@@ -106,6 +106,11 @@ def servidor_web():
 
 
 @pytest.fixture(scope="session")
+def app_url(servidor_web):
+    return servidor_web + "app/"
+
+
+@pytest.fixture(scope="session")
 def _navegador():
     from playwright.sync_api import sync_playwright
     opciones = {}
@@ -146,8 +151,8 @@ def pagina(_navegador):
 
 
 @pytest.fixture
-def pagina_con_sesion(pagina, servidor_web):
-    pagina.goto(servidor_web)
+def pagina_con_sesion(pagina, app_url):
+    pagina.goto(app_url)
     pagina.get_by_label("Contraseña").fill("clave-de-prueba")
     pagina.get_by_role("button", name="Entrar").click()
     pagina.wait_for_url("**#/nueva")

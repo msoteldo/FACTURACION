@@ -1,7 +1,7 @@
 // Seguimiento de un trabajo: consulta el estado mientras siga activo y muestra las preguntas
 // que el flujo le hace a una persona (modal, captcha, revisar dirección, confirmar "Facturar").
-import { api } from "./api.js";
-import { el, vaciar } from "./dom.js";
+import { api } from "../api.js";
+import { el, vaciar } from "../dom.js";
 
 const ACTIVOS = ["en_cola", "ejecutando", "esperando_respuesta"];
 const INTERVALO_MS = 1500;

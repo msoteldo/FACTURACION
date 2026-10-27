@@ -1,6 +1,6 @@
 // Datos fiscales del receptor. Se guardan en la base y aplican a las facturas nuevas.
-import { api } from "./api.js";
-import { el, vaciar } from "./dom.js";
+import { api } from "../api.js";
+import { el, vaciar } from "../dom.js";
 
 const CAMPOS = [
   ["rfc", "RFC"], ["razon_social", "Razón social"], ["cp", "CP"], ["calle", "Calle"],

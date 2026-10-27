@@ -27,8 +27,8 @@ def test_api_no_queda_tapada_por_estaticos():
     assert client.get("/docs").status_code == 200
 
 
-def test_login_e2e(servidor_web, pagina):
-    pagina.goto(servidor_web)
+def test_login_e2e(app_url, pagina):
+    pagina.goto(app_url)
     expect(pagina).to_have_url(re.compile("#/login$"))
     pagina.get_by_label("Contraseña").fill("mala")
     pagina.get_by_role("button", name="Entrar").click()
@@ -144,11 +144,11 @@ def _trabajo_por_api(tc):
     return r.json()["id"]
 
 
-def test_sesion_vencida_regresa_al_trabajo(servidor_web, pagina_con_sesion):
+def test_sesion_vencida_regresa_al_trabajo(app_url, pagina_con_sesion):
     tid = _trabajo_por_api("9906400000000000000103")
     try:
         p = pagina_con_sesion
-        p.goto(f"{servidor_web}#/trabajo/{tid}")
+        p.goto(f"{app_url}#/trabajo/{tid}")
         expect(p.get_by_role("button", name="Facturar", exact=True)).to_be_visible(timeout=60000)
         p.context.clear_cookies()
         p.reload()
@@ -168,32 +168,32 @@ def _llamadas_a_facturas(p):
     return llamadas
 
 
-def test_trabajo_inexistente_no_consulta_mas(servidor_web, pagina_con_sesion):
+def test_trabajo_inexistente_no_consulta_mas(app_url, pagina_con_sesion):
     p = pagina_con_sesion
     llamadas = _llamadas_a_facturas(p)
-    p.goto(f"{servidor_web}#/trabajo/noexiste123")
+    p.goto(f"{app_url}#/trabajo/noexiste123")
     expect(p.get_by_text("El servicio se reinició")).to_be_visible()
     n = len(llamadas)
     p.wait_for_timeout(3500)
     assert len(llamadas) == n
 
 
-def test_trabajo_terminado_no_consulta_mas(servidor_web, pagina_con_sesion):
+def test_trabajo_terminado_no_consulta_mas(app_url, pagina_con_sesion):
     tid = _trabajo_por_api("9906400000000000000104")
     client.post(f"/facturas/{tid}/cancelar", headers=H)
     p = pagina_con_sesion
     llamadas = _llamadas_a_facturas(p)
-    p.goto(f"{servidor_web}#/trabajo/{tid}")
+    p.goto(f"{app_url}#/trabajo/{tid}")
     expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
     n = len(llamadas)
     p.wait_for_timeout(3500)
     assert len([u for u in llamadas[n:] if u.endswith(tid)]) == 0
 
 
-def test_cancelar_desde_la_web(servidor_web, pagina_con_sesion):
+def test_cancelar_desde_la_web(app_url, pagina_con_sesion):
     tid = _trabajo_por_api("9906400000000000000105")
     p = pagina_con_sesion
-    p.goto(f"{servidor_web}#/trabajo/{tid}")
+    p.goto(f"{app_url}#/trabajo/{tid}")
     p.get_by_role("button", name="Cancelar trabajo").click()
     expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
     expect(p.get_by_role("button", name="Cancelar trabajo")).to_be_hidden()
@@ -201,10 +201,10 @@ def test_cancelar_desde_la_web(servidor_web, pagina_con_sesion):
 
 # ------------------------------------------------------------------ datos fiscales
 
-def test_editar_perfil_aplica_a_la_siguiente_factura(servidor_web, pagina_con_sesion, base_sqlite,
+def test_editar_perfil_aplica_a_la_siguiente_factura(app_url, pagina_con_sesion, base_sqlite,
                                                      monkeypatch, png):
     p = pagina_con_sesion
-    p.goto(f"{servidor_web}#/perfil")
+    p.goto(f"{app_url}#/perfil")
     expect(p.get_by_text("Guarda para poder editarlos aquí")).to_be_visible()
     expect(p.get_by_label("RFC")).to_have_value("CPA010101AB1")
     p.get_by_label("CP").fill("1234")
@@ -218,7 +218,7 @@ def test_editar_perfil_aplica_a_la_siguiente_factura(servidor_web, pagina_con_se
 
     tc = "9906400000000000000106"
     leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": tc})
-    p.goto(f"{servidor_web}#/nueva")
+    p.goto(f"{app_url}#/nueva")
     p.get_by_label("Foto del ticket").set_input_files(png)
     expect(p.get_by_label("TC", exact=True)).to_have_value(tc)
     p.get_by_role("button", name="Facturar", exact=True).click()
@@ -228,9 +228,9 @@ def test_editar_perfil_aplica_a_la_siguiente_factura(servidor_web, pagina_con_se
     expect(p.locator(".estado")).to_have_text("cancelado", timeout=60000)
 
 
-def test_perfil_sin_base_muestra_503(servidor_web, pagina_con_sesion):
+def test_perfil_sin_base_muestra_503(app_url, pagina_con_sesion):
     p = pagina_con_sesion
-    p.goto(f"{servidor_web}#/perfil")
+    p.goto(f"{app_url}#/perfil")
     p.get_by_role("button", name="Guardar").click()
     expect(p.get_by_text("Configura DATABASE_URL")).to_be_visible()
 
@@ -246,8 +246,8 @@ def test_docs_sigue_funcionando_sin_csp_restrictiva():
     assert client.get("/").headers["content-security-policy"] == CSP
 
 
-def test_barra_oculta_en_login(servidor_web, pagina):
-    pagina.goto(servidor_web)
+def test_barra_oculta_en_login(app_url, pagina):
+    pagina.goto(app_url)
     expect(pagina).to_have_url(re.compile("#/login$"))
     expect(pagina.locator("#barra")).to_be_hidden()
 
@@ -263,3 +263,34 @@ def test_forma_de_pago_no_leida_obliga_a_elegir(pagina_con_sesion, monkeypatch, 
     p.get_by_role("button", name="Facturar", exact=True).click()
     p.wait_for_timeout(500)
     expect(p).to_have_url(re.compile("#/nueva$"))
+
+
+# ------------------------------------------------------------------ TicketIA: estructura y sistema de diseño
+
+def test_app_en_app_y_landing_en_raiz():
+    assert "TicketIA" in client.get("/").text
+    r = client.get("/app/")
+    assert r.status_code == 200 and 'src="../js/app.js"' in r.text
+
+
+def test_fuentes_locales_servidas():
+    r = client.get("/fuentes/instrument-sans-latin-wght-normal.woff2")
+    assert r.status_code == 200 and r.content[:4] == b"wOF2"
+
+
+def test_sin_peticiones_externas(app_url, pagina_con_sesion):
+    p = pagina_con_sesion
+    origen = app_url.split("/app/")[0]
+    externas = []
+    p.on("request", lambda r: not r.url.startswith(origen) and externas.append(r.url))
+    p.goto(app_url + "#/perfil")
+    p.wait_for_load_state("networkidle")
+    assert externas == []
+
+
+def test_modo_oscuro(app_url, _navegador):
+    ctx = _navegador.new_context(color_scheme="dark")
+    p = ctx.new_page()
+    p.goto(app_url)
+    assert p.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(13, 17, 24)"
+    ctx.close()

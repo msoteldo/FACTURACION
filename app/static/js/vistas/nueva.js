@@ -1,6 +1,6 @@
 // Nueva factura: foto -> datos leídos por Gemini -> formulario editable -> crear trabajo.
-import { api } from "./api.js";
-import { el, vaciar } from "./dom.js";
+import { api } from "../api.js";
+import { el, vaciar } from "../dom.js";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 

@@ -2,10 +2,10 @@
 // Cada vista exporta montar(contenedor, parametro) y puede devolver una función para desmontarla
 // (detener timers y consultas al cambiar de vista).
 import { api } from "./api.js";
-import * as login from "./login.js";
-import * as nueva from "./nueva.js";
-import * as perfil from "./perfil.js";
-import * as trabajo from "./trabajo.js";
+import * as login from "./vistas/login.js";
+import * as nueva from "./vistas/nueva.js";
+import * as perfil from "./vistas/perfil.js";
+import * as trabajo from "./vistas/trabajo.js";
 
 const VISTAS = { login, nueva, trabajo, perfil };
 const contenedor = document.getElementById("vista");

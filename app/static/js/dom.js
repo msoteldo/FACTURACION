@@ -20,3 +20,14 @@ export function vaciar(nodo, ...hijos) {
   nodo.replaceChildren(...hijos.flat().filter(Boolean));
   return nodo;
 }
+
+// Ícono del sprite de app/index.html (<symbol id="i-…">). Decorativo: aria-hidden.
+export function icono(id, clase = "icono") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", clase);
+  svg.setAttribute("aria-hidden", "true");
+  const uso = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  uso.setAttribute("href", `#i-${id}`);
+  svg.append(uso);
+  return svg;
+}

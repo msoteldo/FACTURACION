@@ -1,5 +1,5 @@
-import { api } from "./api.js";
-import { el } from "./dom.js";
+import { api } from "../api.js";
+import { el } from "../dom.js";
 
 export function montar(contenedor) {
   const campo = el("input", { id: "password", type: "password", autocomplete: "current-password", required: true });
