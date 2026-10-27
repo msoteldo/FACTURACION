@@ -231,3 +231,24 @@ def test_pregunta_trae_expira_en():
     restante = (datetime.fromisoformat(p["expira_en"]) - datetime.now(timezone.utc)).total_seconds()
     assert 0 < restante <= p["expira_en_s"]
     client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+
+
+def test_entrega_por_correo_con_el_formato_real_del_portal():
+    # Como en el portal real (oct-2026): la opción de correo no tiene id method_email_radio;
+    # se reconoce por su texto "Enviar a correo electrónico".
+    r = client.post("/facturas", headers=H, json={"tc": "4406400000000000000001", "tr": "03388",
+                                                   "uso_cfdi": "G01", "forma_pago": "28", "metodo_entrega": "email"})
+    t = esperar_estado(r.json()["id"], {"esperando_respuesta", "error"})
+    assert t["estado"] == "esperando_respuesta", t["error"]
+    assert t["pregunta"]["tipo"] == "confirmar_facturar"
+    assert any("Enviar a correo electrónico" in e["mensaje"] for e in t["eventos"])
+    client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+
+
+def test_sin_opcion_de_correo_el_error_lista_las_opciones():
+    r = client.post("/facturas", headers=H, json={"tc": "3306400000000000000001", "tr": "03388",
+                                                   "uso_cfdi": "G01", "forma_pago": "28", "metodo_entrega": "email"})
+    t = esperar_estado(r.json()["id"], {"esperando_respuesta", "error"})
+    assert t["estado"] == "error"
+    assert "No encontré la opción de entrega por correo" in t["error"]
+    assert "Opciones de entrega en la pantalla" in t["error"] and "method_pdf_radio" in t["error"]

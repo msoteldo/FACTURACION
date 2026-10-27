@@ -50,6 +50,13 @@ PANTALLAS = {
     "entrega de la factura": ("/invoiceSelection", "#invoice_form_btn_submit, #method_pdf_radio"),
 }
 
+# Opciones de entrega: primero el id conocido; si el portal lo cambió, el texto de la opción.
+# En oct-2026 la de correo ya no tenía el id method_email_radio ("Enviar a correo electrónico").
+OPCIONES_ENTREGA = {
+    "email": ("#method_email_radio", re.compile(r"enviar a correo", re.I), "por correo"),
+    "descarga": ("#method_pdf_radio", re.compile(r"^\s*pdf\s*$", re.I), "PDF"),
+}
+
 # Avisos emergentes: el conocido (#popup_btn_accept) y cualquier "Aceptar" dentro del overlay.
 SEL_AVISO = "#popup_btn_accept, #popup_overlay button:has-text('Aceptar')"
 
@@ -429,12 +436,35 @@ class FlujoWalmart:
         self.manejar_modales("07_pago")
         self.exigir_pantalla("entrega de la factura", "07_no_avanzo")
 
+    def elegir_entrega(self, metodo):
+        """Marca la opción de entrega. Devuelve cómo la encontró, o None si no está."""
+        selector, texto, _ = OPCIONES_ENTREGA[metodo]
+        radio = self.page.locator(selector)
+        if radio.count():
+            radio.first.check()
+            return selector
+        radio = self.page.get_by_role("radio", name=texto)
+        if radio.count():
+            radio.first.check()
+            return f"opción '{radio.first.evaluate('e => e.labels[0] ? e.labels[0].innerText.trim() : e.value')}'"
+        return None
+
+    def opciones_entrega_visibles(self):
+        """Para el mensaje de error: qué opciones tiene la pantalla (id, name y texto)."""
+        radios = self.page.eval_on_selector_all(
+            "input[type=radio]",
+            "els => els.map(e => `${e.id || '(sin id)'} name=${e.name || ''} "
+            "'${(e.labels[0] ? e.labels[0].innerText : '').trim()}'`)")
+        return "; ".join(radios) or "ninguna"
+
     def pantalla_entrega(self, sol):
-        radio_id = "#method_email_radio" if sol.metodo_entrega == "email" else "#method_pdf_radio"
-        radio = self.page.locator(radio_id)
-        if not radio.count():
-            self.fallar(f"No encontré la opción de entrega {radio_id}.", "08_entrega_error")
-        radio.first.check()
+        como = self.elegir_entrega(sol.metodo_entrega)
+        if not como:
+            nombre = OPCIONES_ENTREGA[sol.metodo_entrega][2]
+            self.fallar(f"No encontré la opción de entrega {nombre}. "
+                        f"Opciones de entrega en la pantalla: {self.opciones_entrega_visibles()}.",
+                        "08_entrega_error")
+        self.ui.evento(f"Entrega elegida: {como}.")
         if sol.metodo_entrega == "email" and sol.correo_alterno:
             campo = self.page.locator("[name='invoice_form_email_alt_input']")
             if not campo.count():

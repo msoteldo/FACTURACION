@@ -104,6 +104,8 @@ function render() {
       estado.rfc = document.querySelector("[name=membershipOrRFC]").value;
       estado.sinRutas = tc.startsWith("88");
       estado.efectivo = tc.startsWith("55");  // pagado en efectivo: el portal no pide forma de pago
+      estado.entregaReal = tc.startsWith("44");   // entrega como el portal real (oct-2026): sin id method_email_radio
+      estado.sinCorreo = tc.startsWith("33");     // entrega sin opción de correo
       ir("/address");
     };
   } else if (ruta === "/address") {
@@ -146,6 +148,19 @@ function render() {
         <option value="28">Tarjeta de débito</option><option value="05">Monedero electrónico</option></select>
       <button id="form_btn_accept">Continuar</button>`;
     document.getElementById("form_btn_accept").onclick = () => ir("/invoiceSelection");
+  } else if (ruta === "/invoiceSelection" && (estado.entregaReal || estado.sinCorreo)) {
+    app.innerHTML = `
+      <p>Por favor seleccione una de las siguientes opciones:</p>
+      <p>PDF: Muestra en pantalla su factura</p>
+      <p>Enviar por correo: La factura sera enviada unicamente a su correo electronico</p>
+      ${estado.sinCorreo ? "" : '<label><input type="radio" name="metodo" value="mail">&nbsp;Enviar a correo electrónico</label>'}
+      <label><input type="radio" name="metodo" id="method_pdf_radio">&nbsp;PDF</label>
+      <button>Salir</button>
+      <button id="invoice_form_btn_submit">Facturar</button>`;
+    document.getElementById("invoice_form_btn_submit").onclick = () => {
+      window.__facturado = (window.__facturado || 0) + 1;
+      app.innerHTML = "<p>Factura generada correctamente</p>";
+    };
   } else if (ruta === "/invoiceSelection") {
     app.innerHTML = `
       <label><input type="radio" name="m" id="method_email_radio">Correo</label>
