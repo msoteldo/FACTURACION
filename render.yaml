@@ -38,6 +38,9 @@ services:
         sync: false
       - key: REGIMEN_FISCAL_TEXTO
         value: General de Ley Personas Morales
+      # Postgres (Neon) para editar los datos fiscales desde la web. Usa la cadena "pooled".
+      - key: DATABASE_URL
+        sync: false
       - key: ANSWER_TIMEOUT_S
         value: "600"
       # Bot de Telegram (opcional)
