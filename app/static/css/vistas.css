@@ -80,3 +80,54 @@
   .actual .paso-icono::before, .resultado.mostrar .comprobante, .resultado.mostrar .sello-ok { animation: none; }
   .pregunta { transform: none; }
 }
+
+/* ---------- nueva factura ---------- */
+.subtitulo { color: var(--soft); margin: 6px 0 22px; }
+.nueva { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .nueva { grid-template-columns: 1fr; } }
+.zona {
+  position: relative; border: 1.5px dashed var(--line); border-radius: var(--r-lg); background: var(--surface); min-height: 320px;
+  display: grid; place-items: center; text-align: center; padding: 20px; overflow: hidden; cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.zona.sobre { border-color: var(--accent); background: var(--accent-soft); }
+@media (hover: hover) and (pointer: fine) { .zona:hover { border-color: var(--accent); } }
+.zona-vacia { display: grid; gap: 8px; justify-items: center; color: var(--soft); font-size: 14px; }
+.zona-vacia b { color: var(--ink); font-size: 15.5px; }
+.icono.grande { width: 40px; height: 40px; color: var(--accent); }
+.foto { position: absolute; inset: 14px 14px 64px; border-radius: var(--r-md); background: var(--raised); overflow: hidden; display: grid; place-items: center; }
+.foto-imagen { max-height: 100%; object-fit: contain; }
+.lector {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, transparent calc(100% - 46px), color-mix(in srgb, var(--accent) 26%, transparent) calc(100% - 16px), transparent);
+}
+.leyendo .lector { animation: leer 1300ms linear infinite; }
+@keyframes leer { 0% { opacity: 0; transform: translateY(-100%); } 10% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; transform: translateY(0); } }
+.estado-foto {
+  position: absolute; left: 14px; right: 14px; bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 10px; font-size: 13px; box-shadow: var(--shadow-1);
+}
+.estado-foto-texto { display: flex; gap: 8px; align-items: center; }
+.punto { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.leyendo .punto { background: var(--accent); animation: latir 900ms ease-in-out infinite; }
+@keyframes latir { 50% { opacity: 0.3; } }
+.formulario-ticket { display: grid; gap: 18px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.advertencia .advertencias { background: none; padding: 0 0 0 16px; }
+.campos-vacio { grid-column: 1 / -1; }
+.campos.llenar .campo { animation: llenar 260ms var(--ease-out) both; }
+.campos.llenar .campo:nth-child(2) { animation-delay: 40ms; }
+.campos.llenar .campo:nth-child(3) { animation-delay: 80ms; }
+.campos.llenar .campo:nth-child(4) { animation-delay: 120ms; }
+.campos.llenar .campo:nth-child(5) { animation-delay: 160ms; }
+@keyframes llenar { from { opacity: 0; transform: translateY(6px); } }
+.consulta { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.consulta .campo { flex: 1 1 260px; }
+.consulta .btn { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .leyendo .lector { animation: none; opacity: 0.6; transform: none; }
+  .leyendo .punto { animation: none; }
+  .campos.llenar .campo { animation: aparecer 200ms ease both; }
+  @keyframes aparecer { from { opacity: 0; } }
+}

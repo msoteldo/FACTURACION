@@ -99,8 +99,8 @@ def test_extraccion_fallida_permite_captura_manual(pagina_con_sesion, monkeypatc
     p = pagina_con_sesion
     p.get_by_label("Foto del ticket").set_input_files(png)
     expect(p.get_by_text("Gemini no respondió")).to_be_visible()
-    expect(p.get_by_label("Comercio")).to_have_value("")
-    p.get_by_label("Comercio").select_option("heb")
+    expect(p.get_by_role("button", name="HEB")).to_have_attribute("aria-pressed", "false")
+    p.get_by_role("group", name="Comercio").get_by_role("button", name="HEB").click()
     expect(p.get_by_label("Sucursal")).to_be_editable()
     expect(p.get_by_label("Ticket", exact=True)).to_be_editable()
 
@@ -406,3 +406,21 @@ def test_dialogo_se_cierra_si_la_pregunta_cambia(app_url, pagina_con_sesion):
     expect(p.get_by_role("dialog")).to_be_visible()
     client.post(f"/facturas/{tid}/cancelar", headers=H)        # otra vía cancela mientras el diálogo está abierto
     expect(p.get_by_role("dialog")).to_be_hidden(timeout=10000)
+
+
+# ------------------------------------------------------------------ nueva factura
+
+def test_zona_de_foto_con_teclado(pagina_con_sesion):
+    p = pagina_con_sesion
+    with p.expect_file_chooser() as fc:
+        p.get_by_role("button", name="Subir imagen del ticket").focus()
+        p.keyboard.press("Enter")
+    assert fc.value is not None
+
+
+def test_chip_del_comercio_leido(pagina_con_sesion, monkeypatch, png):
+    leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": "9906400000000000000206"})
+    p = pagina_con_sesion
+    p.get_by_label("Foto del ticket").set_input_files(png)
+    expect(p.get_by_role("button", name="Sam's Club / Walmart")).to_have_attribute("aria-pressed", "true")
+    expect(p.get_by_text("Ticket leído")).to_be_visible()
