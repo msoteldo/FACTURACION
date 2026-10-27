@@ -25,7 +25,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import db, extraccion
+from . import db, extraccion, perfil
 from .config import Ajustes
 from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
@@ -91,6 +91,7 @@ def requiere_api_key(clave: Optional[str] = Security(api_key_header)):
 
 
 protegido = [Depends(requiere_api_key)]
+app.include_router(perfil.router, dependencies=protegido)
 
 
 # ------------------------------------------------------------------ modelos

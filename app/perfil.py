@@ -7,6 +7,8 @@ import dataclasses
 import logging
 from datetime import datetime, timezone
 
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy import CheckConstraint, DateTime, Integer, String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Mapped, mapped_column
@@ -75,3 +77,61 @@ def origen_actual():
     if not db.configurada():
         return "entorno"
     return "base" if _fila() else "entorno"
+
+
+# ------------------------------------------------------------------ API
+
+class PerfilEntrada(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    rfc: str = Field(..., pattern=r"^[A-ZÑ&0-9]{12,13}$")
+    cp: str = Field(..., pattern=r"^\d{5}$")
+    razon_social: str = Field(..., min_length=1, max_length=300)
+    calle: str = Field(..., min_length=1, max_length=200)
+    num_ext: str = Field(..., min_length=1, max_length=50)
+    num_int: str = Field("", max_length=50)
+    referencia: str = Field("", max_length=200)
+    estado: str = Field(..., min_length=1, max_length=100)
+    municipio: str = Field(..., min_length=1, max_length=100)
+    colonia: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    regimen_texto: str = Field("General de Ley Personas Morales", min_length=1, max_length=200)
+
+    @field_validator("rfc", mode="before")
+    @classmethod
+    def _rfc_limpio(cls, v):
+        return "".join(str(v).split()).upper() if isinstance(v, str) else v
+
+
+router = APIRouter(tags=["perfil"])
+
+
+def _respuesta(datos, origen):
+    return {"origen": origen, "datos": dataclasses.asdict(datos), "faltantes": datos.faltantes()}
+
+
+@router.get("/perfil")
+def ver_perfil():
+    """Datos fiscales vigentes y de dónde salen ("base" o "entorno")."""
+    try:
+        return _respuesta(obtener_datos(), origen_actual())
+    except PerfilNoDisponible as e:
+        raise HTTPException(503, str(e))
+
+
+@router.put("/perfil")
+def guardar_perfil(body: PerfilEntrada):
+    """Guarda los datos fiscales; aplican a las facturas que se creen después."""
+    if not db.configurada():
+        raise HTTPException(503, "Configura DATABASE_URL para editar los datos desde la web.")
+    campos = body.model_dump()
+    campos["email"] = str(campos["email"])
+    try:
+        with db.nueva_sesion() as s:
+            s.merge(PerfilFiscal(id=1, **campos))
+            s.commit()
+    except SQLAlchemyError as e:
+        log.warning("No se pudo guardar el perfil fiscal: %s", type(e).__name__)
+        raise HTTPException(503, "No se pudo guardar el perfil fiscal; intenta en un momento.")
+    log.info("Perfil fiscal actualizado.")
+    return _respuesta(DatosFiscales(**campos), "base")

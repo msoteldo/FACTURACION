@@ -1,5 +1,8 @@
 """Datos fiscales editables: se leen al crear cada trabajo y se ven/editan con /perfil."""
 import dataclasses
+import logging
+
+import pytest
 
 from app import db, main
 from app.config import DatosFiscales
@@ -56,3 +59,41 @@ def test_duplicado_trae_trabajo_id():
     assert r.json()["detail"]["trabajo_id"] == t["id"]
     assert t["id"] in r.json()["detail"]["error"]
     client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+
+
+PERFIL = {"rfc": "CPA010101AB1", "cp": "01000", "razon_social": "CLUB DE PADEL DE PRUEBA",
+          "calle": "Calle Falsa", "num_ext": "123", "num_int": "", "referencia": "",
+          "estado": "Ciudad de México", "municipio": "Benito Juárez", "colonia": "Centro",
+          "email": "facturas@example.com", "regimen_texto": "General de Ley Personas Morales"}
+
+
+def test_get_perfil_desde_entorno(base_sqlite):
+    r = client.get("/perfil", headers=H).json()
+    assert r["origen"] == "entorno" and r["datos"]["rfc"] == "CPA010101AB1" and r["faltantes"] == []
+
+
+def test_put_normaliza_y_guarda(base_sqlite):
+    r = client.put("/perfil", headers=H, json={**PERFIL, "rfc": " xaxx 010101000 "})
+    assert r.status_code == 200 and r.json()["origen"] == "base"
+    assert client.get("/perfil", headers=H).json()["datos"]["rfc"] == "XAXX010101000"
+    assert obtener_datos().rfc == "XAXX010101000"
+
+
+@pytest.mark.parametrize("cambio", [{"cp": "1234"}, {"rfc": "ABC"}, {"email": "no"}, {"calle": "  "}])
+def test_put_invalido_422(base_sqlite, cambio):
+    assert client.put("/perfil", headers=H, json={**PERFIL, **cambio}).status_code == 422
+
+
+def test_put_sin_base_503():
+    r = client.put("/perfil", headers=H, json=PERFIL)
+    assert r.status_code == 503 and "DATABASE_URL" in r.json()["detail"]
+
+
+def test_put_no_loguea_valores(base_sqlite, caplog):
+    caplog.set_level(logging.DEBUG)
+    client.put("/perfil", headers=H, json={**PERFIL, "rfc": "XAXX010101000"})
+    assert "XAXX010101000" not in caplog.text
+
+
+def test_perfil_requiere_autenticacion():
+    assert client.get("/perfil").status_code == 401
