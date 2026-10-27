@@ -16,6 +16,7 @@ import logging
 from contextlib import asynccontextmanager
 import secrets
 import threading
+import time
 from datetime import date
 from typing import Literal, Optional
 
@@ -25,7 +26,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import db, extraccion, perfil
+from . import db, extraccion, perfil, sesion
 from .config import Ajustes
 from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
@@ -81,17 +82,25 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 
-def requiere_api_key(clave: Optional[str] = Security(api_key_header)):
+def requiere_api_key(request: Request, clave: Optional[str] = Security(api_key_header)):
+    """Acepta el header X-API-Key (curl, bot) o la cookie de la webapp."""
     if not ajustes.api_key:
         raise HTTPException(503, "El servidor no tiene API_KEY configurada; se rechazan todas las solicitudes.")
-    # Tolera espacios o comillas que se cuelan al copiar y pegar la clave.
-    clave = (clave or "").strip().strip("\"'")
-    if not clave or not secrets.compare_digest(clave.encode(), ajustes.api_key.encode()):
-        raise HTTPException(401, "X-API-Key inválida o ausente.")
+    clave = sesion.limpiar_clave(clave)
+    if clave and secrets.compare_digest(clave.encode(), ajustes.api_key.encode()):
+        return
+    if sesion.token_valido(request.cookies.get(sesion.COOKIE), ajustes.api_key, time.time()):
+        # Un formulario de otro sitio no puede mandar este header: segunda barrera contra CSRF
+        # (la primera es SameSite=Strict).
+        if request.method not in ("GET", "HEAD") and request.headers.get("x-requested-with") != "fetch":
+            raise HTTPException(403, "Falta el header X-Requested-With: fetch.")
+        return
+    raise HTTPException(401, "X-API-Key inválida o ausente.")
 
 
 protegido = [Depends(requiere_api_key)]
 app.include_router(perfil.router, dependencies=protegido)
+app.include_router(sesion.crear_router(lambda: ajustes.api_key))
 
 
 # ------------------------------------------------------------------ modelos
