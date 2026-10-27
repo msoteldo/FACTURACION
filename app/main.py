@@ -26,20 +26,20 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
 from . import db, extraccion
-from .config import Ajustes, DatosFiscales
+from .config import Ajustes
+from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
-from .trabajos import GestorTrabajos
+from .trabajos import DatosIncompletos, GestorTrabajos, TrabajoDuplicado
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 ajustes = Ajustes.desde_env()
 if ajustes.database_url:
     db.iniciar(ajustes.database_url)
-datos_fiscales = DatosFiscales.desde_env()
-gestor = GestorTrabajos(ajustes, datos_fiscales)
+gestor = GestorTrabajos(ajustes, obtener_datos)
 
 bot = None
 if ajustes.telegram_token:
@@ -136,6 +136,18 @@ class Respuesta(BaseModel):
 
 # ------------------------------------------------------------------ rutas
 
+def _crear(tipo, solicitud=None):
+    """Crea un trabajo y traduce los errores de creación a respuestas HTTP."""
+    try:
+        return gestor.crear(tipo, solicitud).a_dict()
+    except PerfilNoDisponible as e:
+        raise HTTPException(503, str(e))
+    except DatosIncompletos as e:
+        raise HTTPException(503, f"Faltan datos fiscales: {e.faltantes}")
+    except TrabajoDuplicado as e:
+        raise HTTPException(409, {"error": str(e), "trabajo_id": e.trabajo_id})
+
+
 @app.get("/salud")
 def salud():
     """Health check para Render (sin autenticación, sin datos sensibles)."""
@@ -145,8 +157,12 @@ def salud():
 @app.get("/configuracion", dependencies=protegido)
 def configuracion():
     """Qué falta configurar, sin revelar valores."""
+    try:
+        faltantes = gestor.obtener_datos().faltantes()
+    except PerfilNoDisponible as e:
+        raise HTTPException(503, str(e))
     return {
-        "datos_fiscales_faltantes": datos_fiscales.faltantes(),
+        "datos_fiscales_faltantes": faltantes,
         "gemini_configurado": bool(ajustes.gemini_api_key),
         "gemini_modelo": ajustes.gemini_modelo,
         "headless": ajustes.headless,
@@ -172,51 +188,30 @@ async def extraer_ticket(foto: UploadFile = File(...)):
 
 @app.post("/facturas", status_code=202, dependencies=protegido)
 def crear_factura(body: NuevaFactura):
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     solicitud = SolicitudFactura(
         tc=body.tc, tr=body.tr, uso_cfdi=body.uso_cfdi, forma_pago=body.forma_pago,
         metodo_entrega=body.metodo_entrega,
         correo_alterno=str(body.correo_alterno) if body.correo_alterno else None,
     )
-    try:
-        t = gestor.crear("factura", solicitud)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", solicitud)
 
 
 @app.post("/facturas/oxxo", status_code=202, dependencies=protegido)
 def crear_factura_oxxo(body: NuevaFacturaOxxo):
     """Factura un ticket de OXXO. Se detiene a confirmar ANTES de 'Continuar', que en OXXO
     puede generar la factura de inmediato. El avance se ve con GET /facturas/{id}."""
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     sol = SolicitudOxxo(fecha=body.fecha, folio=body.folio, id_venta=body.id_venta.upper(),
                         total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
-    try:
-        t = gestor.crear("factura", sol)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", sol)
 
 
 @app.post("/facturas/heb", status_code=202, dependencies=protegido)
 def crear_factura_heb(body: NuevaFacturaHeb):
     """Factura un ticket de HEB. Se detiene a confirmar ANTES de 'Generar factura', que emite
     la factura de inmediato. El avance se ve con GET /facturas/{id}."""
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
-    try:
-        t = gestor.crear("factura", sol)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", sol)
 
 
 @app.post("/consultas", status_code=202, dependencies=protegido)
@@ -224,18 +219,14 @@ def crear_consulta(body: NuevaConsulta):
     """Busca un ticket YA facturado en "Consulta o reenvía tu factura" y descarga el
     XML/PDF si el portal lo ofrece. No factura ni reenvía nada. El avance y los archivos
     se ven igual que una factura: GET /facturas/{id}."""
-    try:
-        t = gestor.crear("consulta", SolicitudConsulta(tc=body.numero))
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("consulta", SolicitudConsulta(tc=body.numero))
 
 
 @app.post("/diagnostico/portal", status_code=202, dependencies=protegido)
 def diagnosticar_portal():
     """Abre el portal en modo headless y lista campos/botones (equivale a --inspect).
     Sirve para comprobar desde Render que el portal no se comporta distinto en headless."""
-    return gestor.crear("inspeccion").a_dict()
+    return _crear("inspeccion")
 
 
 def _trabajo(trabajo_id):

@@ -30,6 +30,20 @@ log = logging.getLogger("facturacion.trabajos")
 ACTIVOS = {"en_cola", "ejecutando", "esperando_respuesta"}
 
 
+class TrabajoDuplicado(ValueError):
+    """Ya hay un trabajo activo del mismo tipo para ese TC."""
+    def __init__(self, mensaje, trabajo_id):
+        super().__init__(mensaje)
+        self.trabajo_id = trabajo_id
+
+
+class DatosIncompletos(Exception):
+    """Faltan datos fiscales obligatorios; no se puede facturar."""
+    def __init__(self, faltantes):
+        super().__init__(f"Faltan datos fiscales: {faltantes}")
+        self.faltantes = faltantes
+
+
 def _ahora():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -53,6 +67,7 @@ class Trabajo:
         self.creado_ts = time.time()
         self.facturado = False            # True en cuanto se dio el clic irreversible
         self.origen = None                # quién lo pidió (p. ej. {"chat": id} de Telegram)
+        self.datos = None                 # DatosFiscales vigentes al crearlo; no cambian después
         self._respuesta = None
         self._hay_respuesta = threading.Event()
         self._cancelar = threading.Event()
@@ -134,9 +149,11 @@ class InteraccionTrabajo:
 
 
 class GestorTrabajos:
-    def __init__(self, ajustes, datos_fiscales):
+    def __init__(self, ajustes, obtener_datos):
         self.ajustes = ajustes
-        self.datos = datos_fiscales
+        # Se llama al crear cada trabajo: así un cambio en los datos fiscales (p. ej. desde
+        # la web) aplica a la siguiente factura sin reiniciar. Puede lanzar PerfilNoDisponible.
+        self.obtener_datos = obtener_datos
         # Objetos con on_pregunta(t) y on_fin(t) (p. ej. el bot de Telegram).
         self.oyentes = []
         self.trabajos = {}
@@ -148,6 +165,9 @@ class GestorTrabajos:
 
     def crear(self, tipo, solicitud=None, origen=None):
         self.limpiar_viejos()
+        datos = self.obtener_datos()
+        if tipo == "factura" and datos.faltantes():
+            raise DatosIncompletos(datos.faltantes())
         with self._lock:
             if solicitud is not None:
                 for t in self.trabajos.values():
@@ -155,12 +175,13 @@ class GestorTrabajos:
                     # termine (o expire) un intento de facturar el mismo ticket.
                     if (t.tipo == tipo and t.estado in ACTIVOS and t.solicitud is not None
                             and t.solicitud.tc == solicitud.tc):
-                        raise ValueError(
+                        raise TrabajoDuplicado(
                             f"Ya hay un trabajo de tipo '{tipo}' activo para ese TC: {t.id} "
                             f"(estado: {t.estado}). Revísalo con GET /facturas/{t.id} "
-                            f"o cancélalo con POST /facturas/{t.id}/cancelar.")
+                            f"o cancélalo con POST /facturas/{t.id}/cancelar.", t.id)
             t = Trabajo(tipo, solicitud, self.ajustes.dir_trabajos)
             t.origen = origen  # antes de arrancar el hilo, para que los oyentes lo vean
+            t.datos = datos
             self.trabajos[t.id] = t
         threading.Thread(target=self._correr, args=(t,), daemon=True, name=f"trabajo-{t.id}").start()
         return t
@@ -277,12 +298,12 @@ class GestorTrabajos:
                         # Si el portal abre el PDF/XML en otra pestaña, también se captura.
                         ctx.on("page", lambda p: p.on("download", guardar_descarga))
                         if isinstance(t.solicitud, SolicitudOxxo):
-                            flujo = FlujoOxxo(page, self.datos, ui, self.ajustes.oxxo_usuario,
+                            flujo = FlujoOxxo(page, t.datos, ui, self.ajustes.oxxo_usuario,
                                               self.ajustes.oxxo_password)
                         elif isinstance(t.solicitud, SolicitudHeb):
-                            flujo = FlujoHeb(page, self.datos, ui)
+                            flujo = FlujoHeb(page, t.datos, ui)
                         else:
-                            flujo = FlujoWalmart(page, self.datos, ui)
+                            flujo = FlujoWalmart(page, t.datos, ui)
                         try:
                             self._ejecutar_flujo(t, flujo, page)
                         except (FlujoCancelado, FlujoError):

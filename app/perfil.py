@@ -21,7 +21,8 @@ CAMPOS = tuple(f.name for f in dataclasses.fields(DatosFiscales))
 
 
 class PerfilNoDisponible(Exception):
-    pass
+    def __init__(self, mensaje="No se pudo leer el perfil fiscal; intenta en un momento."):
+        super().__init__(mensaje)
 
 
 def _ahora():
@@ -60,7 +61,7 @@ def _fila():
     except SQLAlchemyError as e:
         # Solo el tipo: el mensaje puede traer la cadena de conexión.
         log.warning("No se pudo leer el perfil fiscal: %s", type(e).__name__)
-        raise PerfilNoDisponible("No se pudo leer el perfil fiscal; intenta en un momento.") from e
+        raise PerfilNoDisponible() from e
 
 
 def obtener_datos():

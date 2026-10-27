@@ -27,7 +27,9 @@ import requests
 from . import extraccion
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
+from .perfil import PerfilNoDisponible
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
+from .trabajos import DatosIncompletos
 
 log = logging.getLogger("facturacion.telegram")
 
@@ -374,14 +376,13 @@ class BotFacturacion:
                 and re.fullmatch(r"[A-Z0-9]{1,12}", p.get("id_venta") or "") and p.get("total")):
             return self.enviar(chat, "Faltan datos del ticket (fecha, folio, ID de venta o total). "
                                      "Corrígelos con /fecha, /folio, /id o /total.")
-        faltan = self.gestor.datos.faltantes()
-        if faltan:
-            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(faltan)}")
         sol = SolicitudOxxo(fecha=date.fromisoformat(p["fecha"]), folio=p["folio"],
                             id_venta=p["id_venta"], total=p["total"], uso_cfdi=p["uso_cfdi"])
         try:
             t = self.gestor.crear("factura", sol, origen={"chat": chat})
-        except ValueError as e:
+        except DatosIncompletos as e:
+            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(e.faltantes)}")
+        except (ValueError, PerfilNoDisponible) as e:
             return self.enviar(chat, f"⚠️ {_e(e)}")
         self.pendientes.pop(chat, None)
         self.trabajo_de_chat[chat] = t.id
@@ -393,14 +394,13 @@ class BotFacturacion:
                 and re.fullmatch(r"\d{1,12}", p.get("num_ticket") or "") and p.get("total")):
             return self.enviar(chat, "Faltan datos del ticket (sucursal, ticket, fecha o total). "
                                      "Corrígelos con /sucursal, /ticket, /fecha o /total.")
-        faltan = self.gestor.datos.faltantes()
-        if faltan:
-            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(faltan)}")
         sol = SolicitudHeb(sucursal=str(int(p["sucursal"])), ticket=p["num_ticket"],
                            fecha=date.fromisoformat(p["fecha"]), total=p["total"], uso_cfdi=p["uso_cfdi"])
         try:
             t = self.gestor.crear("factura", sol, origen={"chat": chat})
-        except ValueError as e:
+        except DatosIncompletos as e:
+            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(e.faltantes)}")
+        except (ValueError, PerfilNoDisponible) as e:
             return self.enviar(chat, f"⚠️ {_e(e)}")
         self.pendientes.pop(chat, None)
         self.trabajo_de_chat[chat] = t.id
@@ -415,14 +415,13 @@ class BotFacturacion:
         if not re.fullmatch(r"\d{10,30}", p["tc"]) or not re.fullmatch(r"\d{1,10}", p["tr"]):
             return self.enviar(chat, "Falta el TC o el TR (o no son solo dígitos). Corrígelos con "
                                      "<code>/tc</code> y <code>/tr</code>.")
-        faltan = self.gestor.datos.faltantes()
-        if faltan:
-            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(faltan)}")
         sol = SolicitudFactura(tc=p["tc"], tr=p["tr"], uso_cfdi=p["uso_cfdi"],
                                forma_pago=p["forma_pago"], metodo_entrega="email")
         try:
             t = self.gestor.crear("factura", sol, origen={"chat": chat})
-        except ValueError as e:
+        except DatosIncompletos as e:
+            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(e.faltantes)}")
+        except (ValueError, PerfilNoDisponible) as e:
             return self.enviar(chat, f"⚠️ {_e(e)}")
         self.pendientes.pop(chat, None)
         self.trabajo_de_chat[chat] = t.id
@@ -507,7 +506,9 @@ class BotFacturacion:
             return self.enviar(chat, "Uso: <code>/consultar TC</code>")
         try:
             t = self.gestor.crear("consulta", SolicitudConsulta(tc=numero), origen={"chat": chat})
-        except ValueError as e:
+        except DatosIncompletos as e:
+            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(e.faltantes)}")
+        except (ValueError, PerfilNoDisponible) as e:
             return self.enviar(chat, f"⚠️ {_e(e)}")
         self.trabajo_de_chat[chat] = t.id
         self.enviar(chat, "🔎 Consultando en el portal…")

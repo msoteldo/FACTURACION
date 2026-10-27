@@ -129,8 +129,8 @@ def test_tc_duplicado_activo_se_rechaza():
 
 
 def test_diferencias_en_datos_fiscales_se_preguntan(monkeypatch):
-    datos = dataclasses.replace(main.gestor.datos, razon_social="CLUB DE PADEL SA DE CV")
-    monkeypatch.setattr(main.gestor, "datos", datos)
+    datos = dataclasses.replace(main.gestor.obtener_datos(), razon_social="CLUB DE PADEL SA DE CV")
+    monkeypatch.setattr(main.gestor, "obtener_datos", lambda: datos)
     t = nueva(tc="9906422222222222222222")
     t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
     assert t["pregunta"]["tipo"] == "revisar_direccion"
