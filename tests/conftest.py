@@ -106,6 +106,11 @@ def servidor_web():
 
 
 @pytest.fixture(scope="session")
+def app_url(servidor_web):
+    return servidor_web + "app/"
+
+
+@pytest.fixture(scope="session")
 def _navegador():
     from playwright.sync_api import sync_playwright
     opciones = {}
@@ -119,7 +124,7 @@ def _navegador():
 
 @pytest.fixture
 def pagina(_navegador):
-    """Página nueva. Falla la prueba si aparece un diálogo no esperado (p. ej. un alert por XSS)
+    """Página nueva. Falla la prueba si aparece cualquier diálogo nativo del navegador (p. ej. un alert por XSS)
     o si el navegador reporta una violación de la CSP."""
     from app import sesion
     sesion.limite.reiniciar()
@@ -128,12 +133,9 @@ def pagina(_navegador):
     p.set_default_timeout(15000)
     p.dialogos_inesperados = []
     p.errores_csp = []
-    p.aceptar_confirm = False
 
     def dialogo(d):
-        if d.type == "confirm" and p.aceptar_confirm:
-            d.accept()
-            return
+        # La app no usa alert/confirm del navegador: cualquier diálogo nativo es un error (p. ej. XSS).
         p.dialogos_inesperados.append(f"{d.type}: {d.message}")
         d.dismiss()
 
@@ -146,8 +148,8 @@ def pagina(_navegador):
 
 
 @pytest.fixture
-def pagina_con_sesion(pagina, servidor_web):
-    pagina.goto(servidor_web)
+def pagina_con_sesion(pagina, app_url):
+    pagina.goto(app_url)
     pagina.get_by_label("Contraseña").fill("clave-de-prueba")
     pagina.get_by_role("button", name="Entrar").click()
     pagina.wait_for_url("**#/nueva")

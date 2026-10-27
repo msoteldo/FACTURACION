@@ -221,3 +221,13 @@ def test_pago_en_efectivo_sin_pantalla_de_forma_de_pago():
     assert "La define el ticket" in t["pregunta"]["datos"]["forma_pago"]
     responder(t, "cancelar")
     assert esperar_estado(t["id"], {"cancelado", "error"})["estado"] == "cancelado"
+
+
+def test_pregunta_trae_expira_en():
+    from datetime import datetime, timezone
+    t = nueva(tc="9906400000000000000201")
+    t = esperar_estado(t["id"], {"esperando_respuesta", "error"})
+    p = t["pregunta"]
+    restante = (datetime.fromisoformat(p["expira_en"]) - datetime.now(timezone.utc)).total_seconds()
+    assert 0 < restante <= p["expira_en_s"]
+    client.post(f"/facturas/{t['id']}/cancelar", headers=H)

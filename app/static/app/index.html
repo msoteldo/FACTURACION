@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>TicketIA</title>
+  <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="../fuentes/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../css/tokens.css">
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/componentes.css">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="../css/vistas.css">
+  <script type="module" src="../js/app.js"></script>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" hidden>
+    <symbol id="i-logo" viewBox="0 0 48 48"><path d="M12 6h18l8 8v28l-3.5-2.5L31 42l-3.5-2.5L24 42l-3.5-2.5L17 42l-3.5-2.5L12 42z" fill="var(--ink)"/><path d="M30 6v8h8" fill="var(--accent)"/><path d="M17 20h14M17 26h14M17 32h8" stroke="var(--surface)" stroke-width="2.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-subir" viewBox="0 0 24 24"><path d="M4 16.5V18a2 2 0 002 2h12a2 2 0 002-2v-1.5M12 15V4M7.5 8.5L12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M12 4l9 16H3z M12 10v4 M12 17v.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-reloj" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-punto" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor"/></symbol>
+    <symbol id="i-cerrar" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </svg>
+  <header class="barra" id="barra" hidden>
+    <a class="marca" href="#/nueva" aria-label="TicketIA"><svg class="logo" aria-hidden="true"><use href="#i-logo"></use></svg><span>Ticket<span class="ia">IA</span></span></a>
+    <nav class="pestanas" aria-label="Secciones">
+      <a href="#/nueva" data-vista="nueva">Nueva factura</a>
+      <a href="#/perfil" data-vista="perfil">Datos fiscales</a>
+    </nav>
+    <div class="cuenta">
+      <span class="cuenta-nombre" id="cuenta-nombre"></span>
+      <span class="avatar" id="avatar" aria-hidden="true" hidden></span>
+      <button type="button" id="salir" class="btn sec chico">Salir</button>
+    </div>
+  </header>
+  <div id="aviso-servidor" class="aviso" role="status" hidden>Despertando el servidor (~1 min)…</div>
+  <main id="vista"></main>
+</body>
+</html>
