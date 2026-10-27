@@ -48,18 +48,19 @@ El software va a salir al público. Necesita una marca, una landing para visitan
 | `--raised` | `#fbfbfa` | `#19202c` |
 | `--ink` | `#141a26` | `#e8ebf2` |
 | `--soft` | `#586072` | `#98a1b3` |
-| `--faint` | `#8b92a1` | `#6c7486` |
+| `--faint` | `#6b7280` | `#8a93a5` |
 | `--line` | `#e3e5ea` | `#252c3a` |
+| `--line-campo` (borde de campos) | `#858c9b` | `#737b8d` |
 | `--accent` | `#2b55d6` | `#6f8fff` |
 | `--accent-ink` | `#ffffff` | `#0d1118` |
 | `--accent-soft` | `#e8eeff` | `#1b2440` |
 | `--accent-soft-ink` | `#1d3fa8` | `#b9c8ff` |
 | `--mark` (campo leído o por revisar) | `#fff0bf` | `#4a3d10` |
 | `--mark-line` | `#e6c75a` | `#8a6f1d` |
-| `--ok` / `--ok-soft` | `#1f8a57` / `#e3f5ec` | `#4cc28a` / `#12301f` |
-| `--danger` / `--danger-soft` | `#c8412f` / `#fdecea` | `#ff7a66` / `#3a1914` |
+| `--ok` / `--ok-soft` | `#177a4a` / `#e3f5ec` | `#4cc28a` / `#12301f` |
+| `--danger` / `--danger-soft` | `#b8392a` / `#fdecea` | `#ff7a66` / `#3a1914` |
 
-  La landing usa `--bg: #fafaf8` en modo claro. El tema sigue a `prefers-color-scheme`.
+  Valores ajustados en la revisión de accesibilidad para cumplir WCAG AA (texto 4.5:1, bordes de campos 3:1); `tests/test_contraste.py` lo verifica. La landing usa `--bg: #fafaf8` en modo claro. El tema sigue a `prefers-color-scheme`.
 - **Tipografía:**
   - Instrument Sans (400–700) para títulos, textos y formularios;
   - IBM Plex Mono (400–600) para TC, TR, RFC, montos, folios, horas y etiquetas tipo ticket.

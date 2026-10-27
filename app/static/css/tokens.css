@@ -42,17 +42,18 @@
   --raised: #fbfbfa;
   --ink: #141a26;
   --soft: #586072;
-  --faint: #8b92a1;
+  --faint: #6b7280;
   --line: #e3e5ea;
+  --line-campo: #858c9b;   /* borde de campos: 3:1 sobre la superficie (WCAG 1.4.11) */
   --accent: #2b55d6;
   --accent-ink: #ffffff;
   --accent-soft: #e8eeff;
   --accent-soft-ink: #1d3fa8;
   --mark: #fff0bf;
   --mark-line: #e6c75a;
-  --ok: #1f8a57;
+  --ok: #177a4a;
   --ok-soft: #e3f5ec;
-  --danger: #c8412f;
+  --danger: #b8392a;
   --danger-soft: #fdecea;
   --scrim: rgba(13, 17, 24, 0.42);
   --shadow-1: 0 1px 2px rgba(20, 26, 38, 0.06);
@@ -80,8 +81,9 @@
     --raised: #19202c;
     --ink: #e8ebf2;
     --soft: #98a1b3;
-    --faint: #6c7486;
+    --faint: #8a93a5;
     --line: #252c3a;
+    --line-campo: #737b8d;
     --accent: #6f8fff;
     --accent-ink: #0d1118;
     --accent-soft: #1b2440;

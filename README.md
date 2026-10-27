@@ -25,26 +25,32 @@ app/
   main.py            API FastAPI
   db.py, perfil.py   datos fiscales editables en Postgres (Neon); sin base se usan los del entorno
   sesion.py          login de la webapp: cookie firmada con una clave derivada de API_KEY
-  static/            webapp (HTML + JS en módulos, sin build)
+  static/            landing (index.html) y app (app/, js/, css/): HTML + JS en módulos, sin build
 migraciones/         migraciones de Alembic (se aplican al arrancar si hay DATABASE_URL)
 tests/               pruebas contra un portal simulado (tests/mock_portal) con Chromium headless
 scripts_locales/     scripts originales para uso en local (navegador visible, input() en terminal)
 ```
 
-## Webapp
+## Webapp: TicketIA
 
-Abre `https://<servicio>.onrender.com/` en la computadora. La contraseña es la `API_KEY`.
+- **`/`** es la landing pública: qué hace TicketIA, cómo funciona y el botón "Entrar".
+- **`/app/`** es la app. La contraseña es la `API_KEY`. Los enlaces viejos `/#/trabajo/<id>` redirigen solos.
 
-- **Nueva factura:** sube la foto del ticket; Gemini llena el formulario según el comercio
-  (Sam's/Walmart, OXXO o HEB) y marca en amarillo lo que conviene revisar. Si no lo lee,
-  elige el comercio y captura a mano. Abajo está "Consultar factura ya emitida" (Walmart).
-- **Trabajo:** muestra el avance y las preguntas del portal con su captura. Antes de
-  "Facturar" pide confirmación. Si la pestaña está en segundo plano, el título cambia a
-  "⚠ Pregunta pendiente" y suena un aviso.
-- **Datos fiscales:** edita RFC, razón social y domicilio. Requiere `DATABASE_URL`; los
-  cambios aplican a las facturas nuevas (y al bot de Telegram).
+Pantallas de la app:
 
-La sesión dura 12 h. Cambiar la `API_KEY` cierra todas las sesiones.
+- **Nueva factura:** arrastra o elige la foto del ticket (también con teclado). Mientras la IA la lee,
+  una franja recorre la foto; luego se elige el comercio (Sam's/Walmart, OXXO o HEB) y los campos dudosos
+  quedan marcados. Si no se lee, se captura a mano. Abajo está "¿Ya facturaste este ticket?" (Walmart).
+- **Trabajo:** línea de pasos, la pregunta del portal con sus capturas y un reloj que usa la hora de
+  expiración del servidor. "Facturar" abre una confirmación dentro de la página (razón social y RFC);
+  Escape la cancela. Al facturar se "imprime" el comprobante.
+- **Datos fiscales:** RFC, razón social y domicilio, con errores junto a cada campo. Requiere
+  `DATABASE_URL`; los cambios aplican a las facturas nuevas (y al bot de Telegram).
+
+Diseño: tokens en `app/static/css/tokens.css` (tema claro y oscuro según el sistema, contraste WCAG AA
+verificado por `tests/test_contraste.py`), fuentes Instrument Sans e IBM Plex Mono servidas desde
+`app/static/fuentes/` (licencia OFL). Las animaciones solo usan `transform` y `opacity` y se apagan
+con "reducir movimiento" del sistema. La sesión dura 12 h; cambiar la `API_KEY` cierra todas las sesiones.
 
 ## Cómo se usa la API
 

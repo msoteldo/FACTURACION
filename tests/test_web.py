@@ -426,3 +426,30 @@ def test_chip_del_comercio_leido(pagina_con_sesion, monkeypatch, png):
     p.get_by_label("Foto del ticket").set_input_files(png)
     expect(p.get_by_role("button", name="Sam's Club / Walmart")).to_have_attribute("aria-pressed", "true")
     expect(p.get_by_text("Ticket leído")).to_be_visible()
+
+
+# ------------------------------------------------------------------ movimiento reducido
+
+def test_flujo_completo_con_movimiento_reducido(app_url, _navegador, monkeypatch, png):
+    leer(monkeypatch, {**TICKET_WALMART, "tc_numero_ticket": "9906400000000000000207"})
+    ctx = _navegador.new_context(reduced_motion="reduce")
+    p = ctx.new_page()
+    dialogos = []
+    p.on("dialog", lambda d: (dialogos.append(d.message), d.dismiss()))
+    try:
+        p.goto(app_url)
+        p.get_by_label("Contraseña").fill("clave-de-prueba")
+        p.get_by_role("button", name="Entrar").click()
+        p.wait_for_url("**#/nueva")
+        p.get_by_label("Foto del ticket").set_input_files(png)
+        expect(p.get_by_label("TC", exact=True)).to_have_value("9906400000000000000207")
+        p.get_by_label("Entrega").select_option("descarga")
+        p.get_by_role("button", name="Facturar", exact=True).click()
+        p.get_by_role("button", name="Facturar", exact=True).click(timeout=60000)
+        p.get_by_role("button", name="Sí, facturar").click()
+        expect(p.locator(".estado")).to_have_attribute("data-estado", "completado", timeout=60000)
+        expect(p.get_by_role("heading", name="Factura emitida")).to_be_visible()
+        assert p.eval_on_selector(".boleto-clip, main", "e => getComputedStyle(e).animationName") in ("none", "vista-entra")
+        assert dialogos == []
+    finally:
+        ctx.close()

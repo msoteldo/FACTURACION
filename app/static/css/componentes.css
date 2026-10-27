@@ -20,7 +20,7 @@
 .label, label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--ink); }
 .input, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select {
   width: 100%; height: 42px; font: 500 15px/20px var(--f-sans); color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px;
+  border: 1px solid var(--line-campo); border-radius: var(--r-md); padding: 10px 12px;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .input.mono, input.mono { font-family: var(--f-mono); font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
