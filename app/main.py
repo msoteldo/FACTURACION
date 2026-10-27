@@ -17,11 +17,13 @@ from contextlib import asynccontextmanager
 import secrets
 import threading
 import time
+from pathlib import Path
 from datetime import date
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Security, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
@@ -78,6 +80,23 @@ app = FastAPI(
 )
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+ESTATICOS = Path(__file__).parent / "static"
+HEADERS_SEGURIDAD = {
+    # El JS de la webapp vive en archivos propios: nada inline. frame-ancestors evita que otro
+    # sitio meta la app en un iframe y engañe con el clic irreversible en "Facturar".
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' blob:; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+@app.middleware("http")
+async def headers_de_seguridad(request: Request, call_next):
+    respuesta = await call_next(request)
+    for nombre, valor in HEADERS_SEGURIDAD.items():
+        respuesta.headers.setdefault(nombre, valor)
+    return respuesta
 
 
 
@@ -161,6 +180,12 @@ def _crear(tipo, solicitud=None):
 @app.get("/salud")
 def salud():
     """Health check para Render (sin autenticación, sin datos sensibles)."""
+    return {"ok": True}
+
+
+@app.get("/sesion", dependencies=protegido)
+def ver_sesion():
+    """La webapp lo usa para saber si sigue con sesión (no toca la base)."""
     return {"ok": True}
 
 
@@ -312,3 +337,8 @@ def telegram_configurar():
     return {"ok": True, "url": info.get("url"), "pendientes": info.get("pending_update_count"),
             "ultimo_error": info.get("last_error_message"),
             "chats_autorizados": len(ajustes.telegram_chats)}
+
+
+# ------------------------------------------------------------------ webapp
+# Al final: el montaje en "/" atiende solo lo que ninguna ruta anterior atendió.
+app.mount("/", StaticFiles(directory=ESTATICOS, html=True), name="webapp")

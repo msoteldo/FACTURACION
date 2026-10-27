@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Facturación</title>
+  <link rel="stylesheet" href="estilos.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="barra" id="barra" hidden>
+    <strong class="marca">Facturación</strong>
+    <nav>
+      <a href="#/nueva">Nueva factura</a>
+      <a href="#/perfil">Datos fiscales</a>
+    </nav>
+    <button type="button" id="salir" class="secundario">Salir</button>
+  </header>
+  <div id="aviso-servidor" class="aviso" role="status" hidden>Despertando el servidor (~1 min)…</div>
+  <main id="vista"></main>
+</body>
+</html>

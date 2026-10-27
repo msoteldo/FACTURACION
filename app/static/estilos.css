@@ -1,0 +1,92 @@
+:root {
+  --fondo: #f6f7f9;
+  --tarjeta: #ffffff;
+  --texto: #1d2330;
+  --tenue: #5f6b7a;
+  --borde: #d9dee5;
+  --primario: #1f5fbf;
+  --primario-texto: #ffffff;
+  --peligro: #b3261e;
+  --aviso: #fff4ce;
+  --revisar: #fff4ce;
+  --ok: #1e7a3c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.barra {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--tarjeta);
+  border-bottom: 1px solid var(--borde);
+}
+.barra nav { display: flex; gap: 16px; flex: 1; }
+.barra a { color: var(--primario); text-decoration: none; }
+.marca { font-size: 17px; }
+
+main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+
+.tarjeta {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.angosta { max-width: 360px; margin: 64px auto; }
+
+h1 { font-size: 22px; margin: 0 0 16px; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+
+label { display: block; font-weight: 600; margin: 12px 0 4px; }
+input, select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+input.revisar, select.revisar { background: var(--revisar); border-color: #c9a400; }
+
+button {
+  margin-top: 16px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--primario);
+  color: var(--primario-texto);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.secundario { background: transparent; color: var(--primario); border: 1px solid var(--borde); margin-top: 0; }
+button.peligro { background: var(--peligro); }
+button + button { margin-left: 8px; }
+
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 16px; }
+
+.error { color: var(--peligro); min-height: 1.5em; margin: 8px 0 0; }
+.campo-error { color: var(--peligro); font-size: 13px; margin: 2px 0 0; }
+.aviso { background: var(--aviso); border: 1px solid #e5cf73; border-radius: 6px; padding: 10px 14px; margin: 12px 0; }
+.barra + .aviso, body > .aviso { max-width: 960px; margin: 12px auto; }
+.ok { color: var(--ok); }
+.tenue { color: var(--tenue); }
+
+.advertencias { margin: 0 0 12px; padding-left: 20px; }
+.vista-previa { max-width: 240px; max-height: 320px; border: 1px solid var(--borde); border-radius: 6px; margin-top: 12px; }
+.captura { max-width: 100%; border: 1px solid var(--borde); border-radius: 6px; margin: 12px 0; }
+.eventos { font-size: 13px; color: var(--tenue); max-height: 240px; overflow: auto; padding-left: 20px; }
+.estado { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.pregunta { border-color: var(--primario); border-width: 2px; }
+.texto-pregunta { white-space: pre-wrap; }
