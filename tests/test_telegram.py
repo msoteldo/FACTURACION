@@ -273,3 +273,37 @@ def test_efectivo_como_opcion_de_forma_de_pago(monkeypatch):
         assert any(b.endswith(":01") for b in botones(menu))
     finally:
         main.gestor.oyentes.remove(bot)
+
+
+def test_ticket_oxxo_de_punta_a_punta(monkeypatch):
+    bot, api = nuevo_bot()
+    try:
+        monkeypatch.setattr(extraccion, "leer_ticket", lambda *a, **k: {
+            "comercio": "OXXO", "comercio_clave": "oxxo", "fecha": "2026-10-09",
+            "oxxo_folio_venta": "1154010", "oxxo_id_venta": "10M0N50RCS1", "total": 270.0,
+            "forma_de_pago": "debito", "confianza_id_venta": "media",
+            "advertencias": ["El 4o carácter del ID podría ser O o 0"], "requiere_revision": True})
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket de OXXO leído" in texto(p))
+        assert "10M0N50RCS1" in texto(resumen) and "confianza media" in texto(resumen)
+        assert not any(b.endswith(":con") for b in botones(resumen))  # sin consulta para OXXO
+
+        # Corrección del ID ambiguo (0 -> O) y del folio.
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/id 10mon50rcs1"}})
+        corregido = api.buscar(lambda m, p: "<code>10MON50RCS1</code>" in texto(p))
+        bot.procesar(boton(next(b for b in botones(corregido) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p) and "OXXO" not in texto(p))
+        assert not any(b.startswith("fp:") for b in botones(usos))  # OXXO no pide forma de pago
+        bot.procesar(boton(next(b for b in botones(usos) if b.endswith(":G01"))))
+
+        foto_datos = api.buscar(lambda m, p: m == "sendPhoto" and "datos fiscales" in texto(p))
+        assert foto_datos["_archivo"] == "04_listo_para_continuar.png"
+        pregunta = api.buscar(lambda m, p: "¿Facturar?" in texto(p))
+        t = texto(pregunta)
+        assert "Ticket OXXO" in t and "10MON50RCS1" in t and "09/10/2026" in t
+        assert "RFC: CPA010101AB1" in t and "Uso CFDI: Adquisición de mercancias" in t
+        bot.procesar(boton(next(b for b in botones(pregunta) if b.endswith(":facturar"))))
+        assert api.buscar(lambda m, p: "Factura de OXXO generada" in texto(p))
+    finally:
+        main.gestor.oyentes.remove(bot)

@@ -47,3 +47,8 @@ services:
         generateValue: true   # Render genera uno; no hace falta copiarlo a ningún lado
       - key: TELEGRAM_ALLOWED_CHAT_IDS
         sync: false
+      # OXXO: cuenta de "usuario frecuente" del portal de facturación
+      - key: OXXO_USUARIO
+        sync: false
+      - key: OXXO_PASSWORD
+        sync: false

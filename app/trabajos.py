@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import requests
 from playwright.sync_api import sync_playwright
 
+from .portal_oxxo import FlujoOxxo, SolicitudOxxo
 from .portal_walmart import FlujoCancelado, FlujoError, FlujoWalmart
 
 log = logging.getLogger("facturacion.trabajos")
@@ -235,6 +236,8 @@ class GestorTrabajos:
         elif t.tipo == "consulta":
             t.resultado = flujo.consultar(url, t.solicitud.tc)
             page.wait_for_timeout(2000)  # dar chance a descargas tardías
+        elif isinstance(t.solicitud, SolicitudOxxo):
+            t.resultado = flujo.ejecutar(self.ajustes.oxxo_url, t.solicitud)
         else:
             t.resultado = flujo.ejecutar(url, t.solicitud)
             page.wait_for_timeout(2000)
@@ -270,7 +273,11 @@ class GestorTrabajos:
                         page.on("download", guardar_descarga)
                         # Si el portal abre el PDF/XML en otra pestaña, también se captura.
                         ctx.on("page", lambda p: p.on("download", guardar_descarga))
-                        flujo = FlujoWalmart(page, self.datos, ui)
+                        if isinstance(t.solicitud, SolicitudOxxo):
+                            flujo = FlujoOxxo(page, self.datos, ui, self.ajustes.oxxo_usuario,
+                                              self.ajustes.oxxo_password)
+                        else:
+                            flujo = FlujoWalmart(page, self.datos, ui)
                         try:
                             self._ejecutar_flujo(t, flujo, page)
                         except (FlujoCancelado, FlujoError):

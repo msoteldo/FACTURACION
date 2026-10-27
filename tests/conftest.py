@@ -7,11 +7,12 @@ from pathlib import Path
 import pytest
 
 MOCK = Path(__file__).parent / "mock_portal" / "index.html"
+MOCK_OXXO = Path(__file__).parent / "mock_portal" / "oxxo.html"
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # la SPA simulada responde el mismo HTML en cualquier ruta
-        cuerpo = MOCK.read_bytes()
+        cuerpo = (MOCK_OXXO if self.path.startswith("/oxxo") else MOCK).read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(cuerpo)))
@@ -30,6 +31,9 @@ os.environ.update({
     "API_KEY": "clave-de-prueba",
     "GEMINI_API_KEY": "gemini-de-prueba",
     "WALMART_URL": f"http://127.0.0.1:{_servidor.server_port}/ticket",
+    "OXXO_URL": f"http://127.0.0.1:{_servidor.server_port}/oxxo/inicio.do",
+    "OXXO_USUARIO": "club@example.com",
+    "OXXO_PASSWORD": "secreto",
     "RFC": "CPA010101AB1",
     "CP": "01000",
     "RAZON_SOCIAL": "CLUB DE PADEL DE PRUEBA",

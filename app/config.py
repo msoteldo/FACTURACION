@@ -91,6 +91,9 @@ class Ajustes:
     telegram_secreto: str
     telegram_chats: frozenset
     url_publica: str
+    oxxo_url: str
+    oxxo_usuario: str
+    oxxo_password: str
 
     @classmethod
     def desde_env(cls):
@@ -120,4 +123,9 @@ class Ajustes:
                 if x.lstrip("-").isdigit()),
             # Render define RENDER_EXTERNAL_URL solo; PUBLIC_URL permite sobrescribirla.
             url_publica=(_env("PUBLIC_URL") or _env("RENDER_EXTERNAL_URL")).rstrip("/"),
+            oxxo_url=_env("OXXO_URL",
+                          "https://www4.oxxo.com:9443/facturacionElectronica-web/views/layout/inicio.do"),
+            # Cuenta de "usuario frecuente" del portal de OXXO (opcional; secretos en Render).
+            oxxo_usuario=_env("OXXO_USUARIO"),
+            oxxo_password=os.environ.get("OXXO_PASSWORD", ""),  # sin strip: puede tener espacios
         )

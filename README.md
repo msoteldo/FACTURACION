@@ -70,6 +70,17 @@ curl -H "$K" -H 'Content-Type: application/json' -X POST $URL/facturas/<id>/resp
   -d '{"pregunta_id":2,"respuesta":"facturar"}'
 ```
 
+## OXXO
+
+`POST /facturas/oxxo` con `{"fecha": "AAAA-MM-DD", "folio": "<Fol_Vta>", "id_venta": "<ID=>",
+"total": 270.00, "uso_cfdi": "G01"}` (o la foto en el bot, que detecta el comercio).
+
+El flujo (`app/portal_oxxo.py`) inicia sesión con `OXXO_USUARIO` / `OXXO_PASSWORD` si están
+configurados, llena el ticket, da **Validar Ticket** (no factura), elige tu RFC guardado y se
+detiene a confirmar **antes de "Continuar"**: con sesión iniciada, ese clic generó la factura
+de inmediato en el portal real. OXXO la envía al correo de la cuenta (hasta 4 horas).
+Si OXXO responde "facturado en tienda" o "ticket no encontrado", el trabajo termina con ese error.
+
 ## Despliegue en Render (plan gratis)
 
 1. Sube este repo a GitHub (sin `.env`).

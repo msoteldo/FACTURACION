@@ -16,6 +16,7 @@ import logging
 from contextlib import asynccontextmanager
 import secrets
 import threading
+from datetime import date
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Security, UploadFile
@@ -26,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import extraccion
 from .config import Ajustes, DatosFiscales
+from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
 from .trabajos import GestorTrabajos
@@ -103,6 +105,14 @@ class NuevaFactura(BaseModel):
     correo_alterno: Optional[EmailStr] = None
 
 
+class NuevaFacturaOxxo(BaseModel):
+    fecha: date = Field(..., description="Fecha de venta del ticket (AAAA-MM-DD)")
+    folio: str = Field(..., pattern=r"^\d{1,9}$", description="Fol_Vta del ticket")
+    id_venta: str = Field(..., pattern=r"^[A-Za-z0-9]{1,12}$", description="ID= del ticket")
+    total: float = Field(..., gt=0, description="Total del ticket")
+    uso_cfdi: Literal["G01", "G03"]
+
+
 class NuevaConsulta(BaseModel):
     numero: str = Field(..., pattern=r"^[A-Za-z0-9-]{1,40}$",
                         description="Número de ticket (TC#) o folio de la factura")
@@ -161,6 +171,22 @@ def crear_factura(body: NuevaFactura):
     )
     try:
         t = gestor.crear("factura", solicitud)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return t.a_dict()
+
+
+@app.post("/facturas/oxxo", status_code=202, dependencies=protegido)
+def crear_factura_oxxo(body: NuevaFacturaOxxo):
+    """Factura un ticket de OXXO. Se detiene a confirmar ANTES de 'Continuar', que en OXXO
+    puede generar la factura de inmediato. El avance se ve con GET /facturas/{id}."""
+    faltan = datos_fiscales.faltantes()
+    if faltan:
+        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
+    sol = SolicitudOxxo(fecha=body.fecha, folio=body.folio, id_venta=body.id_venta.upper(),
+                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
+    try:
+        t = gestor.crear("factura", sol)
     except ValueError as e:
         raise HTTPException(409, str(e))
     return t.a_dict()

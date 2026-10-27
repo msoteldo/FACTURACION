@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Portal simulado OXXO</title>
+<style>
+  .ui-state-disabled { opacity: .5; }
+  .dlg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; }
+  .dlg > div { background: #fff; margin: 80px auto; width: 420px; padding: 10px; }
+</style>
+</head>
+<body>
+<!-- Imita los ids/comportamiento del portal real de OXXO (PrimeFaces, una sola página).
+     Solo para pruebas. Reglas del simulador:
+       - usuario "club@example.com" / contraseña "secreto" inicia sesión.
+       - folio que empieza con 000 -> "Ticket no encontrado"; con 999 -> "facturado en tienda".
+       - Con sesión, "Continuar" GENERA la factura directo (como pasó en el portal real).
+       - Sin sesión, "Continuar" habilita la sección 2 y "Generar Factura" -> "Verifica tus datos". -->
+<form id="form" onsubmit="return false">
+  <div id="login">
+    <input id="form:usuario" name="form:usuario" type="text">
+    <input id="form:pass" name="form:pass" type="password">
+    <button id="form:j_idt55" type="button">Entrar</button>
+  </div>
+  <div id="bienvenida"></div>
+
+  <h3>1.-Ingresa los datos de tu ticket</h3>
+  <input id="form:fecha_input" name="form:fecha_input" type="text" readonly>
+  <input id="form:folio" name="form:folio" type="text" maxlength="9">
+  <input id="form:venta" name="form:venta" type="text" maxlength="12">
+  <input id="form:total" name="form:total" type="text" maxlength="9">
+  <a id="form:validarTicket" href="#">Validar Ticket</a>
+  <button id="form:continuar" type="button" class="ui-state-disabled" disabled>Continuar</button>
+
+  <h3>2.-Ingresa datos de facturación</h3>
+  <div id="rfcsZona"></div>
+  <input id="form:rfc" type="text" disabled>
+  <input id="form:razon" type="text" disabled>
+  <input id="form:calle" type="text" disabled>
+  <input id="form:ext" type="text" disabled>
+  <input id="form:int" type="text" disabled>
+  <input id="form:colonia" type="text" disabled>
+  <input id="form:dele" type="text" disabled>
+  <input id="form:codigo" type="text" disabled>
+  <select id="form:estado_input" disabled><option value="">Selecciona</option>
+    <option value="9">CIUDAD DE MEXICO</option><option value="19">NUEVO LEON</option></select>
+  <select id="form:selectOneMenuRegFis_input" disabled><option value=""></option>
+    <option value="601">General de Ley Personas Morales</option>
+    <option value="626">Régimen Simplificado de Confianza</option></select>
+  <select id="form:selectOneMenuCFDI_input" disabled><option value=""></option>
+    <option value="G01">Adquisición de mercancias</option>
+    <option value="G03">Gastos en general</option>
+    <option value="S01">Sin efectos fiscales</option></select>
+  <button id="form:generarFactura" type="button" class="ui-state-disabled" disabled>Generar Factura</button>
+  <div id="resultado"></div>
+</form>
+
+<script>
+const $ = id => document.getElementById(id);
+const estado = { sesion: false };
+window.__facturado = 0;
+
+function dialogo(texto, botones) {
+  const d = document.createElement("div");
+  d.className = "dlg ui-dialog"; d.setAttribute("role", "dialog");
+  d.innerHTML = `<div><p>${texto}</p></div>`;
+  for (const [etiqueta, accion] of botones) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = etiqueta;
+    b.onclick = () => { d.remove(); if (accion) accion(); };
+    d.firstChild.appendChild(b);
+  }
+  document.body.appendChild(d);
+  return d;
+}
+
+function habilitar(id, si) {
+  const e = $(id); e.disabled = !si; e.classList.toggle("ui-state-disabled", !si);
+}
+
+function habilitarSeccion2() {
+  ["form:rfc", "form:razon", "form:calle", "form:ext", "form:int", "form:colonia", "form:dele",
+   "form:codigo", "form:estado_input", "form:selectOneMenuRegFis_input",
+   "form:selectOneMenuCFDI_input"].forEach(id => habilitar(id, true));
+}
+
+function generar() {
+  window.__facturado += 1;
+  $("resultado").textContent = "Factura generada folio OX-123";
+  ["form:folio", "form:venta", "form:total", "form:rfc", "form:razon"].forEach(id => habilitar(id, false));
+  habilitar("form:continuar", false); habilitar("form:generarFactura", false);
+  dialogo("Se enviará la factura a la cuenta de correo ingresada en un tiempo máximo de 4 horas.",
+          [["OK", null]]);
+}
+
+// Aviso de inactividad que tapa la página un momento después de cargar.
+setTimeout(() => dialogo("Se ha agotado el tiempo de inactividad permitido en el portal.",
+                         [["Aceptar", null]]), 600);
+
+$("form:j_idt55").onclick = () => setTimeout(() => {
+  if ($("form:usuario").value === "club@example.com" && $("form:pass").value === "secreto") {
+    estado.sesion = true;
+    $("login").remove();
+    $("bienvenida").textContent = "Nale... Tu listado";
+    $("rfcsZona").innerHTML = `<select id="form:rfcs_input"><option value="">Selecciona tu RFC</option>
+      <option value="CPA010101AB1">NALE</option></select>`;
+    $("form:rfcs_input").onchange = (e) => {
+      if (!e.target.value) return;
+      // El perfil guardado llena los datos fiscales.
+      habilitarSeccion2();
+      $("form:rfc").value = "CPA010101AB1"; $("form:razon").value = "CLUB DE PADEL DE PRUEBA";
+      $("form:codigo").value = "01000"; $("form:estado_input").value = "9";
+      $("form:selectOneMenuRegFis_input").value = "601";
+    };
+  } else {
+    const g = document.createElement("div");
+    g.className = "ui-growl-message"; g.textContent = "Usuario o contraseña incorrectos";
+    document.body.appendChild(g);
+  }
+}, 300);
+
+$("form:validarTicket").onclick = (ev) => {
+  ev.preventDefault();
+  setTimeout(() => {
+    const folio = $("form:folio").value;
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test($("form:fecha_input").value)) {
+      const g = document.createElement("div");
+      g.className = "ui-growl-message"; g.textContent = "Fecha de venta requerida";
+      document.body.appendChild(g); return;
+    }
+    if (folio.startsWith("000")) { dialogo("Ticket no encontrado", [["Si", null], ["No", null]]); return; }
+    if (folio.startsWith("999")) {
+      dialogo("Estimado usuario su Ticket fue facturado en tienda. ¿Desea descargar el XML?",
+              [["Aceptar", () => { window.__salioACfdinova = 1; }], ["Cancelar", null]]);
+      return;
+    }
+    habilitar("form:continuar", true);
+  }, 400);
+};
+
+$("form:continuar").onclick = () => setTimeout(() => {
+  if (estado.sesion) { generar(); return; }       // con sesión: factura directo
+  habilitarSeccion2();
+  habilitar("form:generarFactura", true);
+}, 400);
+
+$("form:generarFactura").onclick = () => setTimeout(() => {
+  dialogo(`Vista Previa Verifica tus datos. RFC ${$("form:rfc").value}`,
+          [["Si", generar], ["No", null]]);
+}, 300);
+</script>
+</body>
+</html>
