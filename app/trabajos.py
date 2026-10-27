@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import requests
 from playwright.sync_api import sync_playwright
 
+from .portal_heb import FlujoHeb, SolicitudHeb
 from .portal_oxxo import FlujoOxxo, SolicitudOxxo
 from .portal_walmart import FlujoCancelado, FlujoError, FlujoWalmart
 
@@ -238,6 +239,8 @@ class GestorTrabajos:
             page.wait_for_timeout(2000)  # dar chance a descargas tardías
         elif isinstance(t.solicitud, SolicitudOxxo):
             t.resultado = flujo.ejecutar(self.ajustes.oxxo_url, t.solicitud)
+        elif isinstance(t.solicitud, SolicitudHeb):
+            t.resultado = flujo.ejecutar(self.ajustes.heb_url, t.solicitud)
         else:
             t.resultado = flujo.ejecutar(url, t.solicitud)
             page.wait_for_timeout(2000)
@@ -276,6 +279,8 @@ class GestorTrabajos:
                         if isinstance(t.solicitud, SolicitudOxxo):
                             flujo = FlujoOxxo(page, self.datos, ui, self.ajustes.oxxo_usuario,
                                               self.ajustes.oxxo_password)
+                        elif isinstance(t.solicitud, SolicitudHeb):
+                            flujo = FlujoHeb(page, self.datos, ui)
                         else:
                             flujo = FlujoWalmart(page, self.datos, ui)
                         try:

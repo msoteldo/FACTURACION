@@ -94,6 +94,7 @@ class Ajustes:
     oxxo_url: str
     oxxo_usuario: str
     oxxo_password: str
+    heb_url: str
 
     @classmethod
     def desde_env(cls):
@@ -128,4 +129,5 @@ class Ajustes:
             # Cuenta de "usuario frecuente" del portal de OXXO (opcional; secretos en Render).
             oxxo_usuario=_env("OXXO_USUARIO"),
             oxxo_password=os.environ.get("OXXO_PASSWORD", ""),  # sin strip: puede tener espacios
+            heb_url=_env("HEB_URL", "https://facturacion.heb.com.mx/cli/invoice-create/"),
         )

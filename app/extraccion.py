@@ -13,12 +13,12 @@ import requests
 URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
 PROMPT = """Eres un extractor de datos de tickets de compra en México (Sam's Club / Walmart,
-OXXO u otros). Analiza la imagen del ticket y devuelve SOLO un JSON (sin texto antes ni
+OXXO, H-E-B u otros). Analiza la imagen del ticket y devuelve SOLO un JSON (sin texto antes ni
 después, sin ``` de markdown) con esta forma exacta:
 
 {
   "comercio": string,
-  "comercio_clave": "walmart" | "oxxo" | "otro",
+  "comercio_clave": "walmart" | "oxxo" | "heb" | "otro",
   "tienda_numero": string o null,
   "fecha": "YYYY-MM-DD" o null,
   "hora": "HH:MM" o null,
@@ -26,6 +26,8 @@ después, sin ``` de markdown) con esta forma exacta:
   "tr_numero_transaccion": string o null,
   "oxxo_folio_venta": string o null,
   "oxxo_id_venta": string o null,
+  "heb_sucursal": string o null,
+  "heb_ticket": string o null,
   "subtotal": number o null,
   "descuento": number o null,
   "iva_monto": number o null,
@@ -39,7 +41,8 @@ después, sin ``` de markdown) con esta forma exacta:
 
 Reglas importantes:
 - "comercio_clave": "walmart" para Walmart, Sam's Club, Bodega Aurrera, Superama o Walmart
-  Express; "oxxo" si el ticket es de OXXO (Cadena Comercial Oxxo); "otro" en cualquier otro caso.
+  Express; "oxxo" si el ticket es de OXXO (Cadena Comercial Oxxo); "heb" si es de H-E-B
+  (Supermercados Internacionales HEB); "otro" en cualquier otro caso.
 - Walmart/Sam's: el TC (número de ticket) y TR (número de transacción) suelen estar juntos,
   cerca de "TDA#", "OP#", "TE#" y "TR#". Léelos dígito por dígito; si algún dígito no es 100%
   legible, dilo en "advertencias" y baja "confianza_tc"/"confianza_tr". Para OXXO déjalos en
@@ -49,6 +52,12 @@ Reglas importantes:
   números: revisa con cuidado O vs 0, I vs 1, S vs 5, B vs 8, Z vs 2 y G vs 6. Si algún carácter
   es dudoso, di cuál en "advertencias" y baja "confianza_id_venta". La fecha de OXXO viene como
   DD/MM/AAAA. Para Walmart deja los campos oxxo_* en null.
+- H-E-B: la línea de folio del encabezado se ve como "800544 10-03-26 4:34P 229/09/02950".
+  "heb_ticket" es el PRIMER número (800544, solo dígitos). "heb_sucursal" es el último bloque
+  tras la última "/" (02950) SIN ceros a la izquierda (2950). La fecha de HEB viene como
+  MES-DÍA-AÑO de 2 dígitos (10-03-26 = 3 de octubre de 2026): conviértela a "YYYY-MM-DD".
+  "total" es "Venta Total". Para HEB deja tc/tr y los campos oxxo_* en null (y sus confianzas
+  en null); usa "confianza_tc" para la confianza de "heb_ticket".
 - No inventes datos: si algo no se puede leer, usa null y explica por qué en "advertencias".
 - "total" es el único campo obligatorio; si no lo puedes leer con seguridad, ponlo en 0
   y explica en "advertencias".
@@ -126,8 +135,9 @@ def validar(ticket):
     """Revisiones baratas sobre lo extraído; agrega advertencias en vez de corregir."""
     advertencias = list(ticket.get("advertencias") or [])
     clave = ticket.get("comercio_clave")
-    if clave not in ("walmart", "oxxo", "otro"):
-        clave = "oxxo" if "oxxo" in str(ticket.get("comercio", "")).lower() else "walmart"
+    if clave not in ("walmart", "oxxo", "heb", "otro"):
+        comercio = str(ticket.get("comercio", "")).lower()
+        clave = "oxxo" if "oxxo" in comercio else "heb" if "heb" in comercio.replace("-", "") else "walmart"
     ticket["comercio_clave"] = clave
 
     if clave == "oxxo":
@@ -145,6 +155,17 @@ def validar(ticket):
         if not ticket.get("fecha"):
             advertencias.append("No se leyó la fecha de venta; el portal de OXXO la exige.")
         confianzas = [ticket.get("confianza_id_venta")]
+    elif clave == "heb":
+        sucursal = re.sub(r"\s", "", str(ticket.get("heb_sucursal") or "")).lstrip("0")
+        numero = re.sub(r"\s", "", str(ticket.get("heb_ticket") or ""))
+        ticket["heb_sucursal"], ticket["heb_ticket"] = sucursal or None, numero or None
+        if not re.fullmatch(r"\d{1,6}", sucursal):
+            advertencias.append("No se leyó el código de sucursal (último bloque del folio); captúralo a mano.")
+        if not re.fullmatch(r"\d{1,12}", numero):
+            advertencias.append("No se leyó el número de ticket (primer número del folio); captúralo a mano.")
+        if not ticket.get("fecha"):
+            advertencias.append("No se leyó la fecha de compra; el portal de HEB la exige.")
+        confianzas = [ticket.get("confianza_tc")]
     else:
         for campo, nombre in (("tc_numero_ticket", "TC#"), ("tr_numero_transaccion", "TR#")):
             valor = ticket.get(campo)

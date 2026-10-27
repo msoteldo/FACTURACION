@@ -307,3 +307,42 @@ def test_ticket_oxxo_de_punta_a_punta(monkeypatch):
         assert api.buscar(lambda m, p: "Factura de OXXO generada" in texto(p))
     finally:
         main.gestor.oyentes.remove(bot)
+
+
+def test_ticket_heb_de_punta_a_punta(monkeypatch):
+    from datetime import date
+    bot, api = nuevo_bot()
+    try:
+        fecha = date.today().replace(day=1).isoformat()
+        monkeypatch.setattr(extraccion, "leer_ticket", lambda *a, **k: {
+            "comercio": "H-E-B", "comercio_clave": "heb", "fecha": fecha,
+            "heb_sucursal": "2950", "heb_ticket": "800599", "total": 345.7,
+            "confianza_tc": "media", "advertencias": [], "requiere_revision": True})
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket de HEB leído" in texto(p))
+        assert "800599" in texto(resumen) and "2950" in texto(resumen) and "confianza media" in texto(resumen)
+        assert not any(b.endswith(":con") for b in botones(resumen))  # sin consulta para HEB
+
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/ticket 800544"}})
+        corregido = api.buscar(lambda m, p: "<code>800544</code>" in texto(p))
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/tc 123"}})  # no aplica a HEB
+        api.buscar(lambda m, p: "no aplica" in texto(p))
+        bot.procesar(boton(next(b for b in botones(corregido) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p) and "HEB" not in texto(p))
+        assert not any(b.startswith("fp:") for b in botones(usos))  # HEB no pide forma de pago
+        bot.procesar(boton(next(b for b in botones(usos) if b.endswith(":G01"))))
+
+        foto_datos = api.buscar(lambda m, p: m == "sendPhoto" and "datos fiscales" in texto(p))
+        assert foto_datos["_archivo"] == "05_listo_para_facturar.png"
+        pregunta = api.buscar(lambda m, p: "¿Facturar?" in texto(p))
+        t = texto(pregunta)
+        assert "Ticket HEB" in t and "800544" in t and "2950" in t
+        assert "RFC: CPA010101AB1" in t and "Uso CFDI: G01 - Adquisición de mercancías." in t
+        assert "Entrega: 📧 por correo a facturas@example.com" in t
+        bot.procesar(boton(next(b for b in botones(pregunta) if b.endswith(":facturar"))))
+        fin = api.buscar(lambda m, p: "Factura de HEB generada" in texto(p))
+        assert "JA1933771" in texto(fin)
+    finally:
+        main.gestor.oyentes.remove(bot)

@@ -81,6 +81,21 @@ detiene a confirmar **antes de "Continuar"**: con sesión iniciada, ese clic gen
 de inmediato en el portal real. OXXO la envía al correo de la cuenta (hasta 4 horas).
 Si OXXO responde "facturado en tienda" o "ticket no encontrado", el trabajo termina con ese error.
 
+## HEB
+
+`POST /facturas/heb` con `{"sucursal": "2950", "ticket": "800544", "fecha": "AAAA-MM-DD",
+"total": 345.70, "uso_cfdi": "G01"}` (o la foto en el bot). En el ticket de HEB, `ticket` es el
+primer número de la línea de folio (`800544 10-03-26 4:34P 229/09/02950`), `sucursal` es el último
+bloque sin ceros (`2950`) y la fecha viene como MES-DÍA-AÑO (`10-03-26` = 3 de octubre de 2026).
+
+El portal (`https://facturacion.heb.com.mx/cli/invoice-create/`, `app/portal_heb.py`) no requiere
+cuenta ni tiene captcha: se usan `RFC`, `RAZON_SOCIAL`, `CP`, `REGIMEN_FISCAL_TEXTO` y `EMAIL`.
+Pasos: ticket (sucursal, ticket, fecha, venta) > **Agregar ticket** > **Continuar** (solo valida)
+> datos fiscales > **Generar factura**. El flujo se detiene a confirmar **antes de "Generar
+factura"**, que emite la factura de inmediato; el portal real habilita ese botón aunque falten
+campos, así que se validan antes. HEB envía la factura al correo capturado. Solo se factura
+hasta el último día del mes de la compra.
+
 ## Despliegue en Render (plan gratis)
 
 1. Sube este repo a GitHub (sin `.env`).

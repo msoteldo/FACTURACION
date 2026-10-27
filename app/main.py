@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import extraccion
 from .config import Ajustes, DatosFiscales
+from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
@@ -113,6 +114,14 @@ class NuevaFacturaOxxo(BaseModel):
     uso_cfdi: Literal["G01", "G03"]
 
 
+class NuevaFacturaHeb(BaseModel):
+    sucursal: str = Field(..., pattern=r"^\d{1,6}$", description="Código de sucursal (p. ej. 2950)")
+    ticket: str = Field(..., pattern=r"^\d{1,12}$", description="Número de ticket")
+    fecha: date = Field(..., description="Fecha de compra (AAAA-MM-DD)")
+    total: float = Field(..., gt=0, description="Venta total del ticket")
+    uso_cfdi: Literal["G01", "G03"]
+
+
 class NuevaConsulta(BaseModel):
     numero: str = Field(..., pattern=r"^[A-Za-z0-9-]{1,40}$",
                         description="Número de ticket (TC#) o folio de la factura")
@@ -185,6 +194,22 @@ def crear_factura_oxxo(body: NuevaFacturaOxxo):
         raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     sol = SolicitudOxxo(fecha=body.fecha, folio=body.folio, id_venta=body.id_venta.upper(),
                         total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
+    try:
+        t = gestor.crear("factura", sol)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return t.a_dict()
+
+
+@app.post("/facturas/heb", status_code=202, dependencies=protegido)
+def crear_factura_heb(body: NuevaFacturaHeb):
+    """Factura un ticket de HEB. Se detiene a confirmar ANTES de 'Generar factura', que emite
+    la factura de inmediato. El avance se ve con GET /facturas/{id}."""
+    faltan = datos_fiscales.faltantes()
+    if faltan:
+        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
+    sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
+                       total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
     try:
         t = gestor.crear("factura", sol)
     except ValueError as e:

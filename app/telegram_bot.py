@@ -25,6 +25,7 @@ from datetime import date, datetime
 import requests
 
 from . import extraccion
+from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
 
@@ -32,6 +33,9 @@ log = logging.getLogger("facturacion.telegram")
 
 USOS = {"G01": "🛒 G01 Mercancías (barra)", "G03": "🧾 G03 Gastos generales"}
 FORMAS = {"01": "Efectivo", "04": "Crédito", "28": "Débito", "05": "Monedero"}
+# Campos que cada /comando puede corregir según el comercio del ticket pendiente.
+CAMPOS_CORREGIBLES = {"walmart": {"tc", "tr"}, "oxxo": {"folio", "id", "fecha", "total"},
+                      "heb": {"sucursal", "ticket", "fecha", "total"}}
 ETIQUETAS = {"facturar": "✅ Facturar", "cancelar": "✖ Cancelar", "continuar": "Continuar",
              "cerrar": "Cerrar", "reintentar": "🔄 Reintentar"}
 MAX_TEXTO, MAX_PIE = 4000, 1000
@@ -163,7 +167,7 @@ class BotFacturacion:
         foto = self._file_id_imagen(msg)
         if foto:
             return self._leer_foto(chat, foto)
-        if comando in ("/tc", "/tr", "/folio", "/id", "/fecha", "/total"):
+        if comando in ("/tc", "/tr", "/folio", "/id", "/sucursal", "/ticket", "/fecha", "/total"):
             return self._corregir(chat, comando[1:], args)
         if comando == "/facturar":
             partes = args.split()
@@ -209,13 +213,22 @@ class BotFacturacion:
         comercio = ticket.get("comercio_clave") or "walmart"
         if comercio == "otro":
             return self.enviar(chat, f"Todavía no sé facturar tickets de {_e(ticket.get('comercio') or 'ese comercio')}. "
-                                     "Por ahora: Sam's/Walmart y OXXO.")
+                                     "Por ahora: Sam's/Walmart, OXXO y HEB.")
         if comercio == "oxxo":
             total = ticket.get("total")
             p = {"accion": accion, "id": next(self._ids), "comercio": "oxxo", "ticket": ticket,
                  "fecha": ticket.get("fecha"),
                  "folio": re.sub(r"\s", "", str(ticket.get("oxxo_folio_venta") or "")),
                  "id_venta": re.sub(r"\s", "", str(ticket.get("oxxo_id_venta") or "")).upper(),
+                 "total": float(total) if isinstance(total, (int, float)) and total > 0 else None}
+            self.pendientes[chat] = p
+            return self._mostrar_pendiente(chat, p)
+        if comercio == "heb":
+            total = ticket.get("total")
+            p = {"accion": accion, "id": next(self._ids), "comercio": "heb", "ticket": ticket,
+                 "fecha": ticket.get("fecha"),
+                 "sucursal": re.sub(r"\s", "", str(ticket.get("heb_sucursal") or "")),
+                 "num_ticket": re.sub(r"\s", "", str(ticket.get("heb_ticket") or "")),
                  "total": float(total) if isinstance(total, (int, float)) and total > 0 else None}
             self.pendientes[chat] = p
             return self._mostrar_pendiente(chat, p)
@@ -254,9 +267,32 @@ class BotFacturacion:
         self.enviar(chat, "\n".join(lineas), _teclado([
             [("🧾 Facturar", f"a:{p['id']}:fac"), ("🗑 Descartar", f"x:{p['id']}")]]))
 
+    def _mostrar_pendiente_heb(self, chat, p):
+        t = p["ticket"]
+        fecha = p.get("fecha")
+        fecha_txt = date.fromisoformat(fecha).strftime("%d/%m/%Y") if fecha else "—"
+        conf = "" if t.get("confianza_tc") in (None, "alta") else f" ⚠️ confianza {t.get('confianza_tc')}"
+        lineas = ["<b>Ticket de HEB leído</b>",
+                  f"Sucursal (código): <code>{_e(p['sucursal'] or '—')}</code>",
+                  f"Ticket: <code>{_e(p['num_ticket'] or '—')}</code>{conf}",
+                  f"Fecha: {_e(fecha_txt)}",
+                  f"Total: ${p['total']:,.2f}" if p.get("total") else "Total: —"]
+        for adv in t.get("advertencias") or []:
+            lineas.append(f"⚠️ {_e(adv)}")
+        lineas.append("\nRevisa el <b>ticket</b> contra el papel. Corrige con <code>/sucursal</code>, "
+                      "<code>/ticket</code>, <code>/fecha DD/MM/AAAA</code> o <code>/total</code>.")
+        if p.get("accion") == "facturar":
+            lineas.append("\n¿Para qué es la compra?")
+            return self.enviar(chat, "\n".join(lineas), self._teclado_uso(p))
+        lineas.append("\n¿Qué quieres hacer?")
+        self.enviar(chat, "\n".join(lineas), _teclado([
+            [("🧾 Facturar", f"a:{p['id']}:fac"), ("🗑 Descartar", f"x:{p['id']}")]]))
+
     def _mostrar_pendiente(self, chat, p):
         if p.get("comercio") == "oxxo":
             return self._mostrar_pendiente_oxxo(chat, p)
+        if p.get("comercio") == "heb":
+            return self._mostrar_pendiente_heb(chat, p)
         t = p["ticket"]
         lineas = ["<b>Ticket leído</b>"]
         for etiqueta, valor in (("Comercio", t.get("comercio")), ("Fecha", t.get("fecha")),
@@ -286,7 +322,7 @@ class BotFacturacion:
     def _teclado_uso(self, p):
         pid = p["id"]
         ultima = [("🗑 Descartar", f"x:{pid}")]
-        if p.get("comercio") != "oxxo":  # el portal de OXXO no pide forma de pago
+        if p.get("comercio") not in ("oxxo", "heb"):  # esos portales no piden forma de pago
             ultima.insert(0, ("💳 Cambiar forma de pago", f"fp:{pid}"))
         return _teclado([
             [(USOS["G01"], f"u:{pid}:G01")],
@@ -303,16 +339,17 @@ class BotFacturacion:
         valor = re.sub(r"\s", "", valor)
         if not p:
             return self.enviar(chat, "No hay un ticket pendiente. Manda la foto primero.")
-        oxxo = p.get("comercio") == "oxxo"
-        if (campo in ("tc", "tr")) == oxxo:
+        if campo not in CAMPOS_CORREGIBLES[p.get("comercio")]:
             return self.enviar(chat, "Ese dato no aplica a este ticket. Usa /ayuda.")
-        if campo in ("tc", "tr", "folio") and not valor.isdigit():
+        if campo in ("tc", "tr", "folio", "sucursal", "ticket") and not valor.isdigit():
             return self.enviar(chat, f"Uso: <code>/{campo} 123456…</code> (solo dígitos)")
         if campo == "id":
             valor = valor.upper()
             if not re.fullmatch(r"[A-Z0-9]{1,12}", valor):
                 return self.enviar(chat, "Uso: <code>/id 10MON50RCS1</code> (hasta 12 letras o dígitos)")
             campo = "id_venta"
+        elif campo == "ticket":
+            campo = "num_ticket"
         elif campo == "fecha":
             try:
                 valor = datetime.strptime(valor, "%d/%m/%Y").date().isoformat()
@@ -351,9 +388,30 @@ class BotFacturacion:
         self.enviar(chat, f"⏳ Validando el ticket en el portal de OXXO ({_e(p['uso_cfdi'])}). "
                           "Te aviso antes de facturar (≈1 min).")
 
+    def _lanzar_heb(self, chat, p):
+        if not (p.get("fecha") and re.fullmatch(r"\d{1,6}", p.get("sucursal") or "")
+                and re.fullmatch(r"\d{1,12}", p.get("num_ticket") or "") and p.get("total")):
+            return self.enviar(chat, "Faltan datos del ticket (sucursal, ticket, fecha o total). "
+                                     "Corrígelos con /sucursal, /ticket, /fecha o /total.")
+        faltan = self.gestor.datos.faltantes()
+        if faltan:
+            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(faltan)}")
+        sol = SolicitudHeb(sucursal=str(int(p["sucursal"])), ticket=p["num_ticket"],
+                           fecha=date.fromisoformat(p["fecha"]), total=p["total"], uso_cfdi=p["uso_cfdi"])
+        try:
+            t = self.gestor.crear("factura", sol, origen={"chat": chat})
+        except ValueError as e:
+            return self.enviar(chat, f"⚠️ {_e(e)}")
+        self.pendientes.pop(chat, None)
+        self.trabajo_de_chat[chat] = t.id
+        self.enviar(chat, f"⏳ Capturando el ticket en el portal de HEB ({_e(p['uso_cfdi'])}). "
+                          "Te aviso antes de facturar (≈1 min).")
+
     def _lanzar(self, chat, p):
         if p.get("comercio") == "oxxo":
             return self._lanzar_oxxo(chat, p)
+        if p.get("comercio") == "heb":
+            return self._lanzar_heb(chat, p)
         if not re.fullmatch(r"\d{10,30}", p["tc"]) or not re.fullmatch(r"\d{1,10}", p["tr"]):
             return self.enviar(chat, "Falta el TC o el TR (o no son solo dígitos). Corrígelos con "
                                      "<code>/tc</code> y <code>/tr</code>.")
@@ -418,7 +476,7 @@ class BotFacturacion:
             self._pedir_forma(chat, p)
         elif tipo == "u" and valor in USOS:
             p["uso_cfdi"] = valor
-            if p.get("comercio") == "oxxo" or p.get("forma_pago") in FORMAS:
+            if p.get("comercio") in ("oxxo", "heb") or p.get("forma_pago") in FORMAS:
                 self._lanzar(chat, p)
             else:
                 self._pedir_forma(chat, p)
@@ -514,6 +572,12 @@ class BotFacturacion:
                        f"Folio de venta: <code>{_e(d.get('folio', ''))}</code>",
                        f"ID de venta: <code>{_e(d.get('id_venta', ''))}</code>",
                        f"Total: ${_e(d.get('total', ''))}"]
+        elif d.get("comercio") == "HEB":
+            lineas += ["<b>Ticket HEB</b> (aceptado por HEB)",
+                       f"Sucursal (código): <code>{_e(d.get('sucursal', ''))}</code>",
+                       f"Ticket: <code>{_e(d.get('ticket', ''))}</code>",
+                       f"Fecha: {_e(d.get('fecha_portal') or d.get('fecha', ''))}",
+                       f"Total: ${_e(d.get('total', ''))}"]
         else:
             lineas += ["<b>Ticket</b>",
                        f"TC: <code>{_e(d.get('tc', ''))}</code>",
@@ -545,6 +609,12 @@ class BotFacturacion:
             self.enviar_captura(chat, t, "08_resultado_final.png",
                                 "✅ <b>Factura de OXXO generada.</b> OXXO la envía al correo de tu "
                                 "cuenta (puede tardar hasta 4 horas).")
+        elif t.estado == "completado" and t.tipo == "factura" and isinstance(t.solicitud, SolicitudHeb):
+            r = t.resultado or {}
+            self.enviar_captura(chat, t, "06_resultado_final.png",
+                                f"✅ <b>Factura de HEB generada</b> ({_e(r.get('estado') or '')}). "
+                                f"Folio: <code>{_e(r.get('serie_folio') or '—')}</code>. "
+                                f"HEB la envió a {_e(r.get('correo') or 'tu correo')}.")
         elif t.estado == "completado" and t.tipo == "factura":
             self.enviar_captura(chat, t, "11_resultado_final.png",
                                 "✅ <b>Factura generada.</b> Walmart la envía por correo (PDF y XML).")
@@ -586,6 +656,7 @@ AYUDA = """<b>Facturación de tickets</b>
 
 /tc 123… y /tr 123… — corregir TC/TR (Sam's/Walmart)
 /folio, /id, /fecha DD/MM/AAAA, /total — corregir un ticket de OXXO
+/sucursal, /ticket, /fecha, /total — corregir un ticket de HEB
 /facturar TC TR — facturar sin foto
 /consultar TC — buscar un ticket ya facturado
 /estado — ver el último trabajo

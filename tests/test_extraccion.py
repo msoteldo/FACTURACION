@@ -103,3 +103,34 @@ def test_sin_comercio_clave_se_deduce(monkeypatch):
     t = dict(TICKET)
     monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(t)))
     assert extraccion.leer_ticket("k", "m", b"img", "image/jpeg")["comercio_clave"] == "walmart"
+
+
+TICKET_HEB = {
+    "comercio": "H-E-B", "comercio_clave": "heb", "fecha": "2026-10-03",
+    "heb_sucursal": "02950", "heb_ticket": "800 544", "total": 345.7,
+    "forma_de_pago": "debito", "confianza_tc": "alta", "advertencias": [],
+}
+
+
+def test_heb_normaliza_sucursal_y_ticket(monkeypatch):
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(TICKET_HEB)))
+    r = extraccion.leer_ticket("k", "m", b"img", "image/jpeg")
+    assert r["comercio_clave"] == "heb"
+    assert r["heb_sucursal"] == "2950" and r["heb_ticket"] == "800544"  # sin ceros ni espacios
+    assert r["requiere_revision"] is False
+    assert not any("TC#" in a for a in r["advertencias"])  # no se exigen campos de Walmart
+
+
+def test_heb_dato_faltante_requiere_revision(monkeypatch):
+    t = dict(TICKET_HEB, heb_ticket=None, fecha=None, confianza_tc="media")
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(t)))
+    r = extraccion.leer_ticket("k", "m", b"img", "image/jpeg")
+    assert r["requiere_revision"] is True
+    assert any("número de ticket" in a for a in r["advertencias"]) and any("fecha" in a for a in r["advertencias"])
+
+
+def test_heb_se_deduce_del_nombre(monkeypatch):
+    t = dict(TICKET_HEB, comercio="H-E-B Chipinque")
+    del t["comercio_clave"]
+    monkeypatch.setattr(extraccion.requests, "post", lambda *a, **k: Resp(200, respuesta_gemini(t)))
+    assert extraccion.leer_ticket("k", "m", b"img", "image/jpeg")["comercio_clave"] == "heb"

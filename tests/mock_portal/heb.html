@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Portal simulado HEB</title>
+<style>
+  .dlg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; }
+  .dlg > div { background: #fff; margin: 80px auto; width: 420px; padding: 10px; }
+  .mat-calendar-body-disabled { opacity: .4; }
+  .cal { border: 1px solid #999; width: 280px; }
+  .opciones { border: 1px solid #999; width: 280px; }
+</style>
+</head>
+<body>
+<!-- Imita el portal real de HEB (Angular Material, 3 pasos, rutas /cli/...). Solo para pruebas.
+     Reglas del simulador:
+       - Un aviso "IMPORTANTE" con botón "Enterado" tapa la página al cargar.
+       - Sucursal: autocompletar (mat-option) que busca por código o nombre; "(2950) HEB MTY CHIPINQUE".
+       - Fecha: input de SOLO LECTURA; el calendario abre con el botón "Open calendar" y se navega
+         con ".mat-calendar-previous-button". No permite días futuros.
+       - Ticket que empieza con 000 -> "Continuar" se queda en el paso 1 con un mensaje de error.
+       - "Generar factura" está SIEMPRE habilitado (como el portal real), aun con campos vacíos.
+       - Con datos válidos pasa al paso 3 (invoice-confirm) con folio JA1933771. -->
+<div id="paso1">
+  <h2>Facturación de tickets</h2>
+  <mat-form-field><label for="mat-input-0">Sucursal</label>
+    <input id="mat-input-0" type="text" autocomplete="off"></mat-form-field>
+  <mat-form-field><label for="mat-input-1">Ticket</label>
+    <input id="mat-input-1" type="number"></mat-form-field>
+  <mat-form-field><label for="mat-input-2">Fecha</label>
+    <input id="mat-input-2" type="text" readonly>
+    <button type="button" aria-label="Open calendar" id="abrirCal"></button></mat-form-field>
+  <div id="cal" class="cal" hidden>
+    <button type="button" class="mat-calendar-period-button" id="periodo"></button>
+    <button type="button" class="mat-calendar-previous-button" aria-label="Previous month">&lt;</button>
+    <div id="dias"></div>
+  </div>
+  <mat-form-field><label for="mat-input-3">Venta</label>
+    <input id="mat-input-3" type="number"></mat-form-field>
+  <button type="button" id="agregar"><span>add_circle_outline</span>Agregar ticket</button>
+  <table id="lista" hidden><thead><tr><th>Sucursal</th><th>No. ticket</th><th>Fecha ticket</th><th>Venta</th></tr></thead>
+    <tbody></tbody></table>
+  <button type="button" id="cancelar1">Cancelar</button>
+  <button type="button" id="continuar">Continuar</button>
+  <div id="mensajes"></div>
+</div>
+
+<div id="paso2" hidden>
+  <h2>Datos fiscales</h2>
+  <mat-form-field><label for="mat-input-6">RFC</label><input id="mat-input-6" type="text"></mat-form-field>
+  <mat-form-field><label for="mat-input-7">Nombre \ Razón social</label><input id="mat-input-7" type="text"></mat-form-field>
+  <mat-form-field><label for="mat-input-8">Código Postal</label><input id="mat-input-8" type="text" maxlength="5"></mat-form-field>
+  <mat-form-field><label for="mat-input-4">Régimen fiscal</label><input id="mat-input-4" type="text" autocomplete="off"></mat-form-field>
+  <mat-form-field><label for="mat-input-9">Correo electrónico</label><input id="mat-input-9" type="email"></mat-form-field>
+  <mat-form-field><label for="mat-input-5">USO DE CFDI</label><input id="mat-input-5" type="text" autocomplete="off"></mat-form-field>
+  <button type="button" id="regresar">Regresar</button>
+  <button type="button" id="generar">Generar factura</button>
+</div>
+
+<div id="paso3" hidden>
+  <h2>Resultado de facturas</h2>
+  <h1>¡Tu factura ha sido generada correctamente!</h1>
+  <table><thead><tr><th></th><th>Serie-Folio</th><th>Tienda</th><th>Ticket(s)</th><th>Estado</th><th>Mensaje</th></tr></thead>
+    <tbody><tr><td>✓</td><td id="r-folio">JA1933771</td><td id="r-tienda"></td><td id="r-ticket"></td>
+      <td>VIGENTE</td><td></td></tr></tbody></table>
+  <p>Se te ha enviado al correo indicado <b id="r-correo"></b></p>
+  <button type="button">Descargar</button><button type="button">Enviar</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+window.__facturado = 0;
+const SUCURSALES = ["(2950) HEB MTY CHIPINQUE", "(2951) HEB MTY LAS FUENTES"];
+const REGIMENES = ["601 - General de Ley Personas Morales", "626 - Régimen Simplificado de Confianza"];
+const USOS = ["G03 - Gastos en general.", "G01 - Adquisición de mercancías.", "I02 - Mobiliario y equipo de oficina por inversiones.", "S01 - Sin efectos fiscales."];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const hoy = new Date();
+let vista = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+let lista = [];
+
+function ruta(p) { history.pushState({}, "", "/heb/cli/" + p); }
+
+function dialogo(texto, boton) {
+  const d = document.createElement("div");
+  d.className = "dlg"; d.setAttribute("role", "dialog");
+  d.innerHTML = `<div><p>${texto}</p></div>`;
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = boton; b.onclick = () => d.remove();
+  d.firstChild.appendChild(b);
+  document.body.appendChild(d);
+}
+
+setTimeout(() => dialogo("IMPORTANTE Solo se podrá generar su factura hasta el día último del mes de su compra.", "Enterado"), 300);
+
+// Autocompletar genérico: filtra al escribir y pinta <mat-option>.
+function autocompletar(input, fuente, alElegir) {
+  const caja = document.createElement("div");
+  caja.className = "opciones"; caja.hidden = true;
+  input.parentElement.after(caja);
+  const pintar = () => {
+    const q = input.value.toLowerCase();
+    caja.innerHTML = "";
+    fuente.filter(t => t.toLowerCase().includes(q)).forEach(t => {
+      const o = document.createElement("mat-option");
+      o.style.display = "block"; o.textContent = t;
+      o.onclick = () => { input.value = t; caja.hidden = true; if (alElegir) alElegir(t); };
+      caja.appendChild(o);
+    });
+    caja.hidden = !caja.children.length;
+  };
+  input.addEventListener("focus", pintar);
+  input.addEventListener("click", pintar);
+  input.addEventListener("input", pintar);
+}
+autocompletar($("mat-input-0"), SUCURSALES);
+autocompletar($("mat-input-4"), REGIMENES);
+autocompletar($("mat-input-5"), USOS);
+
+function pintarCal() {
+  $("periodo").textContent = MESES[vista.getMonth()].slice(0, 3).toUpperCase() + " " + vista.getFullYear() + " ";
+  const total = new Date(vista.getFullYear(), vista.getMonth() + 1, 0).getDate();
+  $("dias").innerHTML = "";
+  for (let d = 1; d <= total; d++) {
+    const f = new Date(vista.getFullYear(), vista.getMonth(), d);
+    const c = document.createElement("div");
+    c.className = "mat-calendar-body-cell" + (f > hoy ? " mat-calendar-body-disabled" : "");
+    c.setAttribute("aria-label", `${d} de ${MESES[vista.getMonth()]} de ${vista.getFullYear()}`);
+    c.textContent = d; c.style.display = "inline-block"; c.style.width = "36px";
+    c.onclick = () => {
+      if (f > hoy) return;
+      $("mat-input-2").value = `${d}/${vista.getMonth() + 1}/${vista.getFullYear()}`;
+      $("mat-input-2").dataset.iso = `${vista.getFullYear()}-${String(vista.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      $("cal").hidden = true;
+    };
+    $("dias").appendChild(c);
+  }
+}
+$("abrirCal").onclick = () => { vista = new Date(hoy.getFullYear(), hoy.getMonth(), 1); pintarCal(); $("cal").hidden = false; };
+document.querySelector(".mat-calendar-previous-button").onclick = () => {
+  vista = new Date(vista.getFullYear(), vista.getMonth() - 1, 1); pintarCal();
+};
+
+function error(texto) {
+  const e = document.createElement("simple-snack-bar");
+  e.textContent = texto; $("mensajes").appendChild(e);
+}
+
+$("agregar").onclick = () => {
+  const s = $("mat-input-0").value, t = $("mat-input-1").value, f = $("mat-input-2").dataset.iso, v = $("mat-input-3").value;
+  if (!SUCURSALES.includes(s) || !t || !f || !v) { error("Captura sucursal, ticket, fecha y venta"); return; }
+  lista = [{ s, t, f, v }];
+  $("lista").hidden = false;
+  $("lista").querySelector("tbody").innerHTML =
+    `<tr><td>${s}</td><td>${t}</td><td>${f}</td><td>$ ${Number(v).toFixed(2)}</td></tr>`;
+};
+
+$("continuar").onclick = () => {
+  if (!lista.length) { error("Agrega al menos un ticket"); return; }
+  if (lista[0].t.startsWith("000")) { error("Ticket no encontrado"); return; }
+  $("paso1").hidden = true; $("paso2").hidden = false; ruta("customer-tax-data");
+};
+
+$("regresar").onclick = () => { $("paso2").hidden = true; $("paso1").hidden = false; ruta("invoice-create"); };
+
+$("generar").onclick = () => setTimeout(() => {
+  window.__facturado += 1;
+  $("r-tienda").textContent = lista[0].s; $("r-ticket").textContent = lista[0].t;
+  $("r-correo").textContent = $("mat-input-9").value.toUpperCase();
+  $("paso2").hidden = true; $("paso3").hidden = false; ruta("invoice-confirm");
+}, 300);
+</script>
+</body>
+</html>
