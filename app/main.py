@@ -25,7 +25,7 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import extraccion
+from . import db, extraccion
 from .config import Ajustes, DatosFiscales
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
@@ -36,6 +36,8 @@ from .trabajos import GestorTrabajos
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 ajustes = Ajustes.desde_env()
+if ajustes.database_url:
+    db.iniciar(ajustes.database_url)
 datos_fiscales = DatosFiscales.desde_env()
 gestor = GestorTrabajos(ajustes, datos_fiscales)
 

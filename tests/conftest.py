@@ -58,3 +58,14 @@ if "CHROMIUM_EXECUTABLE" not in os.environ and Path("/opt/pw-browsers/chromium")
 def _limpiar_directorio():
     yield
     shutil.rmtree("/tmp/facturacion_jobs_tests", ignore_errors=True)
+
+
+@pytest.fixture
+def base_sqlite(tmp_path):
+    """Base SQLite temporal con las tablas creadas; al terminar se vuelve a 'sin base'."""
+    from app import db
+    from app.perfil import Base
+    db.iniciar(f"sqlite:///{tmp_path}/t.db")
+    Base.metadata.create_all(db.motor())
+    yield
+    db.cerrar()
