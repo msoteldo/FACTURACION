@@ -24,12 +24,16 @@
     <symbol id="i-cerrar" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   </svg>
   <header class="barra" id="barra" hidden>
-    <a class="marca" href="#/nueva"><svg class="logo" aria-hidden="true"><use href="#i-logo"></use></svg><span>Ticket<span class="ia">IA</span></span></a>
-    <nav>
-      <a href="#/nueva">Nueva factura</a>
-      <a href="#/perfil">Datos fiscales</a>
+    <a class="marca" href="#/nueva" aria-label="TicketIA"><svg class="logo" aria-hidden="true"><use href="#i-logo"></use></svg><span>Ticket<span class="ia">IA</span></span></a>
+    <nav class="pestanas" aria-label="Secciones">
+      <a href="#/nueva" data-vista="nueva">Nueva factura</a>
+      <a href="#/perfil" data-vista="perfil">Datos fiscales</a>
     </nav>
-    <button type="button" id="salir" class="btn sec chico">Salir</button>
+    <div class="cuenta">
+      <span class="cuenta-nombre" id="cuenta-nombre"></span>
+      <span class="avatar" id="avatar" aria-hidden="true" hidden></span>
+      <button type="button" id="salir" class="btn sec chico">Salir</button>
+    </div>
   </header>
   <div id="aviso-servidor" class="aviso" role="status" hidden>Despertando el servidor (~1 min)…</div>
   <main id="vista"></main>

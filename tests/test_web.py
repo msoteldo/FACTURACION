@@ -349,3 +349,24 @@ def test_landing_con_movimiento_reducido(servidor_web, _navegador):
     expect(p.get_by_text("Factura enviada a tu correo")).to_be_visible()
     assert p.eval_on_selector(".recibo", "e => getComputedStyle(e).animationName") == "none"
     ctx.close()
+
+
+# ------------------------------------------------------------------ barra y entrar
+
+def test_barra_muestra_razon_social_una_sola_vez(app_url, pagina_con_sesion):
+    p = pagina_con_sesion
+    perfiles = []
+    p.on("request", lambda r: r.url.endswith("/perfil") and r.method == "GET" and perfiles.append(1))
+    p.reload()
+    expect(p.locator(".barra")).to_contain_text("CLUB DE PADEL DE PRUEBA")
+    p.get_by_role("link", name="Datos fiscales").click()
+    expect(p.get_by_label("RFC")).to_have_value("CPA010101AB1")
+    p.get_by_role("link", name="Nueva factura").click()
+    expect(p.get_by_label("Foto del ticket")).to_be_attached()
+    assert len(perfiles) == 2          # uno de la barra al recargar y uno de la vista de datos fiscales
+
+
+def test_foco_al_titulo_al_cambiar_de_pantalla(pagina_con_sesion):
+    p = pagina_con_sesion
+    p.get_by_role("link", name="Datos fiscales").click()
+    expect(p.get_by_role("heading", level=1)).to_be_focused()
