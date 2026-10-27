@@ -28,6 +28,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 _servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
 threading.Thread(target=_servidor.serve_forever, daemon=True).start()
 
+# Con pytest-xdist cada proceso usa su propia carpeta de trabajos: si la compartieran,
+# el primero en terminar borraría los archivos de los demás.
+JOBS_DIR = f"/tmp/facturacion_jobs_tests_{os.environ.get('PYTEST_XDIST_WORKER', 'main')}"
+
 # Configuración de prueba: debe existir ANTES de importar app.main. Datos ficticios.
 os.environ.update({
     "API_KEY": "clave-de-prueba",
@@ -47,7 +51,7 @@ os.environ.update({
     "COLONIA": "Centro",
     "EMAIL": "facturas@example.com",
     "ANSWER_TIMEOUT_S": "30",
-    "JOBS_DIR": "/tmp/facturacion_jobs_tests",
+    "JOBS_DIR": JOBS_DIR,
 })
 # En entornos donde el Chromium de Playwright está preinstalado en otra ruta.
 if "CHROMIUM_EXECUTABLE" not in os.environ and Path("/opt/pw-browsers/chromium").exists():
@@ -57,7 +61,7 @@ if "CHROMIUM_EXECUTABLE" not in os.environ and Path("/opt/pw-browsers/chromium")
 @pytest.fixture(scope="session", autouse=True)
 def _limpiar_directorio():
     yield
-    shutil.rmtree("/tmp/facturacion_jobs_tests", ignore_errors=True)
+    shutil.rmtree(JOBS_DIR, ignore_errors=True)
 
 
 @pytest.fixture
