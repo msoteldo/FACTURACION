@@ -6,3 +6,5 @@ salida
 salida_lecturas
 __pycache__
 *.pyc
+docs
+.superpowers

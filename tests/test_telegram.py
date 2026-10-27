@@ -346,3 +346,40 @@ def test_ticket_heb_de_punta_a_punta(monkeypatch):
         assert "JA1933771" in texto(fin)
     finally:
         main.gestor.oyentes.remove(bot)
+
+
+def test_bot_usa_los_datos_vigentes(monkeypatch):
+    datos = dataclasses.replace(main.gestor.obtener_datos(), razon_social="CLUB DE PADEL SA DE CV")
+    monkeypatch.setattr(main.gestor, "obtener_datos", lambda: datos)
+    bot, api = nuevo_bot()
+    try:
+        ticket_leido(monkeypatch, tc="9906466666666666666666")
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":fac"))))
+        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
+        bot.procesar(boton(next(b for b in botones(usos) if b.endswith(":G01"))))
+        t = main.gestor.obtener(bot.trabajo_de_chat[CHAT])
+        assert t.datos.razon_social == "CLUB DE PADEL SA DE CV"
+        main.gestor.cancelar(t.id)
+    finally:
+        main.gestor.oyentes.remove(bot)
+
+
+def test_bot_avisa_si_no_hay_perfil(monkeypatch):
+    from app.perfil import PerfilNoDisponible
+
+    def falla():
+        raise PerfilNoDisponible()
+    monkeypatch.setattr(main.gestor, "obtener_datos", falla)
+    bot, api = nuevo_bot()
+    try:
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/facturar 9906499999999999999999 03388"}})
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":G01"))))
+        formas = api.buscar(lambda m, p: "¿Con qué se pagó?" in texto(p))
+        bot.procesar(boton(next(b for b in botones(formas) if b.endswith(":28"))))
+        assert api.buscar(lambda m, p: "perfil fiscal" in texto(p))
+    finally:
+        main.gestor.oyentes.remove(bot)

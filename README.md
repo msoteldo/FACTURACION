@@ -2,7 +2,7 @@
 
 Servicio web (FastAPI) que toma la foto de un ticket de compra, extrae sus datos con
 Gemini y automatiza el portal de facturación del comercio con Playwright en modo
-headless. Hoy cubre **Sam's Club / Walmart México**.
+headless. Hoy cubre **Sam's Club / Walmart, OXXO y HEB**, con una webapp para usarlo desde la computadora.
 
 Reglas de diseño que el código respeta:
 
@@ -10,8 +10,9 @@ Reglas de diseño que el código respeta:
   para saltarlo: el trabajo se pausa y espera `respuesta = "facturar"`.
 - **Nunca se intenta resolver un captcha.** Si aparece uno visible, el trabajo se pausa
   con una pregunta `captcha` (opciones `reintentar` / `cancelar`) y una captura de pantalla.
-- **Los datos fiscales y las claves solo vienen de variables de entorno** (secretos en
-  Render). Nada va hardcodeado ni en el repo.
+- **Las claves solo vienen de variables de entorno** (secretos en Render). Los datos fiscales
+  también, salvo que se editen desde la webapp (se guardan en Postgres). Nada va hardcodeado
+  ni en el repo.
 
 ## Estructura
 
@@ -22,14 +23,33 @@ app/
   portal_walmart.py  flujo del portal, sin input(): /ticket -> /address -> /payment -> /invoiceSelection
   trabajos.py        cada factura corre en un hilo con su Chromium; se pausa cuando necesita a un humano
   main.py            API FastAPI
+  db.py, perfil.py   datos fiscales editables en Postgres (Neon); sin base se usan los del entorno
+  sesion.py          login de la webapp: cookie firmada con una clave derivada de API_KEY
+  static/            webapp (HTML + JS en módulos, sin build)
+migraciones/         migraciones de Alembic (se aplican al arrancar si hay DATABASE_URL)
 tests/               pruebas contra un portal simulado (tests/mock_portal) con Chromium headless
 scripts_locales/     scripts originales para uso en local (navegador visible, input() en terminal)
 ```
 
+## Webapp
+
+Abre `https://<servicio>.onrender.com/` en la computadora. La contraseña es la `API_KEY`.
+
+- **Nueva factura:** sube la foto del ticket; Gemini llena el formulario según el comercio
+  (Sam's/Walmart, OXXO o HEB) y marca en amarillo lo que conviene revisar. Si no lo lee,
+  elige el comercio y captura a mano. Abajo está "Consultar factura ya emitida" (Walmart).
+- **Trabajo:** muestra el avance y las preguntas del portal con su captura. Antes de
+  "Facturar" pide confirmación. Si la pestaña está en segundo plano, el título cambia a
+  "⚠ Pregunta pendiente" y suena un aviso.
+- **Datos fiscales:** edita RFC, razón social y domicilio. Requiere `DATABASE_URL`; los
+  cambios aplican a las facturas nuevas (y al bot de Telegram).
+
+La sesión dura 12 h. Cambiar la `API_KEY` cierra todas las sesiones.
+
 ## Cómo se usa la API
 
-Todas las rutas, excepto `/salud`, requieren el header `X-API-Key`. En `/docs` está
-Swagger UI (botón **Authorize**), que sirve como frontend provisional.
+Todas las rutas, excepto `/salud`, `/` y `POST /sesion`, requieren el header `X-API-Key` o la
+cookie de sesión de la webapp. En `/docs` está Swagger UI (botón **Authorize**).
 
 | Método | Ruta | Para qué |
 |---|---|---|
@@ -42,6 +62,8 @@ Swagger UI (botón **Authorize**), que sirve como frontend provisional.
 | POST | `/facturas/{id}/cancelar` | cancela (solo antes del clic en Facturar) |
 | GET | `/facturas/{id}/archivos/{nombre}` | descarga XML/PDF o capturas `.png` |
 | POST | `/consultas` | `{"numero": "<TC# o folio>"}`: busca un ticket **ya facturado** en "Consulta o reenvía tu factura" y descarga el XML/PDF. No factura ni reenvía nada; el avance se ve con `GET /facturas/{id}` |
+| POST / DELETE | `/sesion` | login de la webapp (`{"password": "<API_KEY>"}`) y salir |
+| GET / PUT | `/perfil` | datos fiscales vigentes (`origen`: `base` o `entorno`) y editarlos (requiere `DATABASE_URL`) |
 | POST | `/diagnostico/portal` | abre el portal en headless y lista campos (equivale a `--inspect`) |
 
 Estados de un trabajo: `en_cola` -> `ejecutando` <-> `esperando_respuesta` -> `completado` | `cancelado` | `error`.
@@ -108,6 +130,20 @@ hasta el último día del mes de la compra.
      tenga `membershipOrRFC`, `postalCode`, `ticketNumber`, `transactionNumber` y que
      `captcha_visible` sea `false`. Así confirmas que el portal responde igual en headless.
 
+### Datos fiscales en Neon (opcional, para editarlos desde la web)
+
+1. Crea un proyecto gratis en [neon.tech](https://neon.tech) y copia la cadena de conexión
+   **pooled** (el host lleva `-pooler`; trae `sslmode=require`).
+2. Antes del primer deploy, prueba la migración contra una *branch* desechable de Neon:
+   `TEST_DATABASE_URL=<cadena de la branch> pytest -n0 tests/test_db.py`.
+3. En Render → Environment, pega la cadena en `DATABASE_URL`. Al arrancar, el contenedor
+   corre `alembic upgrade head`; si falla, el deploy falla y queda la versión anterior.
+4. La primera vez, la web muestra los datos del entorno. Al guardar, pasan a la base.
+
+Si la base está configurada pero no responde, las facturas nuevas se rechazan con 503:
+nunca se usan los datos del entorno como respaldo, porque podrían estar desactualizados.
+Neon suspende la base tras unos minutos sin uso; la primera consulta tarda ~1 s más.
+
 Límites del plan gratis que el diseño ya considera:
 
 - **512 MB de RAM**: se corre un solo Chromium a la vez (`MAX_BROWSERS=1`); un flujo completo
@@ -149,6 +185,11 @@ cp .env.example .env   # y llénalo
 uvicorn app.main:app --reload --workers 1      # HEADLESS=false en .env para ver el navegador
 pytest                                          # no toca el portal real: usa tests/mock_portal
 ```
+
+`pytest` corre en paralelo (`pytest-xdist`, ver `pytest.ini`). Para depurar una sola prueba:
+`pytest -n0 tests/test_api.py::test_salud_sin_auth`. Con `DATABASE_URL=sqlite:///./facturacion.db`
+en `.env` se puede probar la edición de datos fiscales sin Postgres (crea la tabla con
+`alembic upgrade head`).
 
 ## Notas
 

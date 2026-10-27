@@ -16,28 +16,33 @@ import logging
 from contextlib import asynccontextmanager
 import secrets
 import threading
+import time
+from pathlib import Path
 from datetime import date
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Security, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
-from . import extraccion
-from .config import Ajustes, DatosFiscales
+from . import db, extraccion, perfil, sesion
+from .config import Ajustes
+from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudConsulta, SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
-from .trabajos import GestorTrabajos
+from .trabajos import DatosIncompletos, GestorTrabajos, TrabajoDuplicado
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 ajustes = Ajustes.desde_env()
-datos_fiscales = DatosFiscales.desde_env()
-gestor = GestorTrabajos(ajustes, datos_fiscales)
+if ajustes.database_url:
+    db.iniciar(ajustes.database_url)
+gestor = GestorTrabajos(ajustes, obtener_datos)
 
 bot = None
 if ajustes.telegram_token:
@@ -76,19 +81,52 @@ app = FastAPI(
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+ESTATICOS = Path(__file__).parent / "static"
+HEADERS_SEGURIDAD = {
+    # El JS de la webapp vive en archivos propios: nada inline. frame-ancestors evita que otro
+    # sitio meta la app en un iframe y engañe con el clic irreversible en "Facturar".
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' blob:; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+# Swagger UI y ReDoc cargan su JS desde un CDN con un script inline: con la CSP de la
+# webapp se verían en blanco. A esas páginas solo se les quita la CSP.
+RUTAS_DOCS = {"/docs", "/docs/oauth2-redirect", "/redoc"}
+
+
+@app.middleware("http")
+async def headers_de_seguridad(request: Request, call_next):
+    respuesta = await call_next(request)
+    for nombre, valor in HEADERS_SEGURIDAD.items():
+        if nombre == "Content-Security-Policy" and request.url.path in RUTAS_DOCS:
+            continue
+        respuesta.headers.setdefault(nombre, valor)
+    return respuesta
 
 
 
-def requiere_api_key(clave: Optional[str] = Security(api_key_header)):
+
+def requiere_api_key(request: Request, clave: Optional[str] = Security(api_key_header)):
+    """Acepta el header X-API-Key (curl, bot) o la cookie de la webapp."""
     if not ajustes.api_key:
         raise HTTPException(503, "El servidor no tiene API_KEY configurada; se rechazan todas las solicitudes.")
-    # Tolera espacios o comillas que se cuelan al copiar y pegar la clave.
-    clave = (clave or "").strip().strip("\"'")
-    if not clave or not secrets.compare_digest(clave.encode(), ajustes.api_key.encode()):
-        raise HTTPException(401, "X-API-Key inválida o ausente.")
+    clave = sesion.limpiar_clave(clave)
+    if clave and secrets.compare_digest(clave.encode(), ajustes.api_key.encode()):
+        return
+    if sesion.token_valido(request.cookies.get(sesion.COOKIE), ajustes.api_key, time.time()):
+        # Un formulario de otro sitio no puede mandar este header: segunda barrera contra CSRF
+        # (la primera es SameSite=Strict).
+        if request.method not in ("GET", "HEAD") and request.headers.get("x-requested-with") != "fetch":
+            raise HTTPException(403, "Falta el header X-Requested-With: fetch.")
+        return
+    raise HTTPException(401, "X-API-Key inválida o ausente.")
 
 
 protegido = [Depends(requiere_api_key)]
+app.include_router(perfil.router, dependencies=protegido)
+app.include_router(sesion.crear_router(lambda: ajustes.api_key))
 
 
 # ------------------------------------------------------------------ modelos
@@ -134,17 +172,39 @@ class Respuesta(BaseModel):
 
 # ------------------------------------------------------------------ rutas
 
+def _crear(tipo, solicitud=None):
+    """Crea un trabajo y traduce los errores de creación a respuestas HTTP."""
+    try:
+        return gestor.crear(tipo, solicitud).a_dict()
+    except PerfilNoDisponible as e:
+        raise HTTPException(503, str(e))
+    except DatosIncompletos as e:
+        raise HTTPException(503, f"Faltan datos fiscales: {e.faltantes}")
+    except TrabajoDuplicado as e:
+        raise HTTPException(409, {"error": str(e), "trabajo_id": e.trabajo_id})
+
+
 @app.get("/salud")
 def salud():
     """Health check para Render (sin autenticación, sin datos sensibles)."""
     return {"ok": True}
 
 
+@app.get("/sesion", dependencies=protegido)
+def ver_sesion():
+    """La webapp lo usa para saber si sigue con sesión (no toca la base)."""
+    return {"ok": True}
+
+
 @app.get("/configuracion", dependencies=protegido)
 def configuracion():
     """Qué falta configurar, sin revelar valores."""
+    try:
+        faltantes = gestor.obtener_datos().faltantes()
+    except PerfilNoDisponible as e:
+        raise HTTPException(503, str(e))
     return {
-        "datos_fiscales_faltantes": datos_fiscales.faltantes(),
+        "datos_fiscales_faltantes": faltantes,
         "gemini_configurado": bool(ajustes.gemini_api_key),
         "gemini_modelo": ajustes.gemini_modelo,
         "headless": ajustes.headless,
@@ -170,51 +230,30 @@ async def extraer_ticket(foto: UploadFile = File(...)):
 
 @app.post("/facturas", status_code=202, dependencies=protegido)
 def crear_factura(body: NuevaFactura):
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     solicitud = SolicitudFactura(
         tc=body.tc, tr=body.tr, uso_cfdi=body.uso_cfdi, forma_pago=body.forma_pago,
         metodo_entrega=body.metodo_entrega,
         correo_alterno=str(body.correo_alterno) if body.correo_alterno else None,
     )
-    try:
-        t = gestor.crear("factura", solicitud)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", solicitud)
 
 
 @app.post("/facturas/oxxo", status_code=202, dependencies=protegido)
 def crear_factura_oxxo(body: NuevaFacturaOxxo):
     """Factura un ticket de OXXO. Se detiene a confirmar ANTES de 'Continuar', que en OXXO
     puede generar la factura de inmediato. El avance se ve con GET /facturas/{id}."""
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     sol = SolicitudOxxo(fecha=body.fecha, folio=body.folio, id_venta=body.id_venta.upper(),
                         total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
-    try:
-        t = gestor.crear("factura", sol)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", sol)
 
 
 @app.post("/facturas/heb", status_code=202, dependencies=protegido)
 def crear_factura_heb(body: NuevaFacturaHeb):
     """Factura un ticket de HEB. Se detiene a confirmar ANTES de 'Generar factura', que emite
     la factura de inmediato. El avance se ve con GET /facturas/{id}."""
-    faltan = datos_fiscales.faltantes()
-    if faltan:
-        raise HTTPException(503, f"Faltan datos fiscales en las variables de entorno: {faltan}")
     sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
-    try:
-        t = gestor.crear("factura", sol)
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("factura", sol)
 
 
 @app.post("/consultas", status_code=202, dependencies=protegido)
@@ -222,18 +261,14 @@ def crear_consulta(body: NuevaConsulta):
     """Busca un ticket YA facturado en "Consulta o reenvía tu factura" y descarga el
     XML/PDF si el portal lo ofrece. No factura ni reenvía nada. El avance y los archivos
     se ven igual que una factura: GET /facturas/{id}."""
-    try:
-        t = gestor.crear("consulta", SolicitudConsulta(tc=body.numero))
-    except ValueError as e:
-        raise HTTPException(409, str(e))
-    return t.a_dict()
+    return _crear("consulta", SolicitudConsulta(tc=body.numero))
 
 
 @app.post("/diagnostico/portal", status_code=202, dependencies=protegido)
 def diagnosticar_portal():
     """Abre el portal en modo headless y lista campos/botones (equivale a --inspect).
     Sirve para comprobar desde Render que el portal no se comporta distinto en headless."""
-    return gestor.crear("inspeccion").a_dict()
+    return _crear("inspeccion")
 
 
 def _trabajo(trabajo_id):
@@ -309,3 +344,8 @@ def telegram_configurar():
     return {"ok": True, "url": info.get("url"), "pendientes": info.get("pending_update_count"),
             "ultimo_error": info.get("last_error_message"),
             "chats_autorizados": len(ajustes.telegram_chats)}
+
+
+# ------------------------------------------------------------------ webapp
+# Al final: el montaje en "/" atiende solo lo que ninguna ruta anterior atendió.
+app.mount("/", StaticFiles(directory=ESTATICOS, html=True), name="webapp")
