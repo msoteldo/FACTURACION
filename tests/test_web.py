@@ -538,3 +538,10 @@ def test_cambiar_foto_con_teclado_y_fuera_de_la_zona(pagina_con_sesion, monkeypa
         cambiar.focus()
         p.keyboard.press("Enter")
     expect(p.get_by_text("Arrastra la foto aquí")).to_be_visible()
+
+
+def test_nueva_factura_sin_consulta(pagina_con_sesion):
+    p = pagina_con_sesion
+    expect(p.get_by_role("heading", name="Nueva factura")).to_be_visible()
+    expect(p.get_by_role("button", name="Consultar")).to_have_count(0)
+    expect(p.get_by_text("¿Ya facturaste este ticket?")).to_have_count(0)

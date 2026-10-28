@@ -112,13 +112,6 @@ def test_error_del_portal_incluye_texto_visible():
     assert "03_error_portal.png" in t["capturas"]
 
 
-def test_consulta_no_encontrada_es_error_con_mensaje_del_portal():
-    r = client.post("/consultas", headers=H, json={"numero": "0000000000000000000002"})
-    t = esperar_estado(r.json()["id"], {"error", "completado"})
-    assert t["estado"] == "error"
-    assert t["error"] == "El portal respondió: El ticket no se encuentra facturado o no existe"
-
-
 def test_tc_duplicado_activo_se_rechaza():
     t = nueva(tc="9906411111111111111111")
     r = client.post("/facturas", headers=H, json={
@@ -146,36 +139,6 @@ def test_diagnostico_portal():
     names = {e["name"] for e in t["resultado"]["elementos"]}
     assert {"membershipOrRFC", "postalCode", "ticketNumber", "transactionNumber"} <= names
     assert t["resultado"]["captcha_visible"] is False
-
-
-def test_consulta_descarga_y_no_reenvia():
-    r = client.post("/consultas", headers=H, json={"numero": "9906433333333333333333"})
-    assert r.status_code == 202, r.text
-    t = esperar_estado(r.json()["id"], {"completado", "error", "esperando_respuesta"})
-    assert t["estado"] == "completado", t["error"]
-    assert sorted(t["archivos"]) == ["consulta.pdf", "consulta.xml"]
-    assert not any("Reenviar" in d for d in t["resultado"]["descargas_intentadas"])
-    assert "folio ABC123" in t["resultado"]["texto_visible"]
-    assert t["facturado"] is False
-    pdf = client.get(f"/facturas/{t['id']}/archivos/consulta.pdf", headers=H)
-    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
-
-
-def test_consulta_valida_numero():
-    assert client.post("/consultas", headers=H, json={"numero": "abc 123;"}).status_code == 422
-
-
-def test_consulta_no_se_bloquea_por_factura_activa_del_mismo_tc():
-    tc = "9906444444444444444444"
-    t = nueva(tc=tc)
-    esperar_estado(t["id"], {"esperando_respuesta"})
-    r = client.post("/consultas", headers=H, json={"numero": tc})
-    assert r.status_code == 202, r.text
-    # Otra consulta del mismo TC mientras la primera sigue activa sí se rechaza.
-    assert client.post("/consultas", headers=H, json={"numero": tc}).status_code == 409
-    client.post(f"/facturas/{t['id']}/cancelar", headers=H)
-    c = esperar_estado(r.json()["id"], {"completado", "error"})
-    assert c["estado"] == "completado", c["error"]
 
 
 def test_error_inesperado_guarda_captura(monkeypatch):
@@ -274,3 +237,7 @@ def test_pantalla_reconocida_por_su_contenido_y_no_por_la_url():
     assert t["estado"] == "esperando_respuesta", t["error"]
     assert t["pregunta"]["datos"]["forma_pago"] == "Tarjeta de débito"
     client.post(f"/facturas/{t['id']}/cancelar", headers=H)
+
+
+def test_ya_no_existe_la_consulta_de_facturas():
+    assert client.post("/consultas", headers=H, json={"numero": "9906433333333333333333"}).status_code in (404, 405)

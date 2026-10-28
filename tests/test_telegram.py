@@ -208,23 +208,6 @@ def test_registro_del_webhook():
     assert params["secret_token"] == bot.secreto and bot.secreto.isalnum() and len(bot.secreto) == 64
 
 
-def test_consultar_no_facturado_y_facturarlo_desde_el_aviso(monkeypatch):
-    bot, api = nuevo_bot()
-    try:
-        # En el portal simulado, un número que empieza con 000 "no se encuentra facturado".
-        ticket_leido(monkeypatch, tc="0000000000000000000009")
-        bot.procesar(foto())
-        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
-        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":con"))))
-        aviso = api.buscar(lambda m, p: "aún no está facturado" in texto(p))
-        assert "no se encuentra facturado" in texto(aviso)
-        bot.procesar(boton(next(b for b in botones(aviso) if b.endswith(":fac"))))
-        usos = api.buscar(lambda m, p: "¿Para qué es la compra?" in texto(p))
-        assert any(b.endswith(":G01") for b in botones(usos))
-    finally:
-        main.gestor.oyentes.remove(bot)
-
-
 def test_comando_facturar_va_directo_a_uso():
     bot, api = nuevo_bot()
     try:
@@ -233,20 +216,6 @@ def test_comando_facturar_va_directo_a_uso():
         resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
         assert "¿Para qué es la compra?" in texto(resumen)
         assert not any(b.endswith(":con") for b in botones(resumen))
-    finally:
-        main.gestor.oyentes.remove(bot)
-
-
-def test_consultar_ticket_facturado_solo_avisa(monkeypatch):
-    bot, api = nuevo_bot()
-    try:
-        ticket_leido(monkeypatch, tc="9906499999999999999999")  # el portal simulado lo encuentra
-        bot.procesar(foto())
-        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
-        bot.procesar(boton(next(b for b in botones(resumen) if b.endswith(":con"))))
-        aviso = api.buscar(lambda m, p: "ya está facturado" in texto(p))
-        assert "9906499999999999999999" in texto(aviso)
-        assert CHAT not in bot.pendientes
     finally:
         main.gestor.oyentes.remove(bot)
 
@@ -381,5 +350,22 @@ def test_bot_avisa_si_no_hay_perfil(monkeypatch):
         formas = api.buscar(lambda m, p: "¿Con qué se pagó?" in texto(p))
         bot.procesar(boton(next(b for b in botones(formas) if b.endswith(":28"))))
         assert api.buscar(lambda m, p: "perfil fiscal" in texto(p))
+    finally:
+        main.gestor.oyentes.remove(bot)
+
+
+def test_resumen_sin_consulta_y_comando_consultar_no_crea_trabajos(monkeypatch):
+    bot, api = nuevo_bot()
+    try:
+        ticket_leido(monkeypatch, tc="9906400000000000000401")
+        bot.procesar(foto())
+        resumen = api.buscar(lambda m, p: "Ticket leído" in texto(p))
+        assert not any(b.endswith(":con") for b in botones(resumen))
+        assert "Consultar" not in texto(resumen)
+        antes = set(main.gestor.trabajos)
+        bot.procesar({"update_id": next(_updates),
+                      "message": {"chat": {"id": CHAT}, "text": "/consultar 9906400000000000000401"}})
+        time.sleep(1)
+        assert set(main.gestor.trabajos) == antes
     finally:
         main.gestor.oyentes.remove(bot)

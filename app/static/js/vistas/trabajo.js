@@ -14,7 +14,7 @@ const ESTADOS = {
   en_cola: ["En cola", ""], ejecutando: ["En curso", ""], esperando_respuesta: ["Esperando tu respuesta", "alerta"],
   completado: ["Completado", "ok"], cancelado: ["Cancelado", "error"], error: ["Error", "error"],
 };
-const TITULOS = { factura: "Tu factura", consulta: "Consulta de factura", inspeccion: "Diagnóstico del portal" };
+const TITULOS = { factura: "Tu factura", inspeccion: "Diagnóstico del portal" };
 const PREGUNTAS = {
   confirmar_facturar: ["¿Facturar este ticket?", "Revisa y confirma la factura"],
   revisar_direccion: ["Los datos del portal no coinciden", "Decide si continuar con lo que muestra el portal"],
@@ -172,7 +172,7 @@ export function montar(contenedor, id) {
       if (e.status === 404) {
         detener();
         mensaje.textContent = "El servicio se reinició y el trabajo se perdió. Si ya habías confirmado "
-          + "Facturar, revisa tu correo o usa Consultar.";
+          + "Facturar, revisa tu correo antes de intentarlo de nuevo.";
         pintarEstado("error", "Perdido");
         pasos.hidden = true;
         return;

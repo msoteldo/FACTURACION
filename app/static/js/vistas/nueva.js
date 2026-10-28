@@ -102,15 +102,6 @@ export function montar(contenedor) {
     advertencias, campos, error,
     el("div", { clase: "acciones" }, boton, el("span", { clase: "ayuda" }, "Te pediremos confirmación antes del clic final.")));
 
-  // ---- consulta
-  const numero = el("input", { id: "numero-consulta", type: "text", clase: "mono", required: true, placeholder: "9906412345678901" });
-  const errorConsulta = el("p", { clase: "ayuda error", role: "alert" });
-  const consulta = el("form", { clase: "tarjeta consulta", on: { submit: consultar } },
-    el("div", { clase: "campo" },
-      el("label", { for: "numero-consulta" }, "¿Ya facturaste este ticket? Consulta con el TC o el folio"),
-      numero, errorConsulta),
-    el("button", { type: "submit", clase: "btn sec" }, "Consultar"));
-
   contenedor.append(
     el("h1", {}, "Nueva factura"),
     el("p", { clase: "subtitulo" }, "Sube la foto del ticket. La IA lo lee y tú revisas antes de facturar."),
@@ -118,8 +109,7 @@ export function montar(contenedor) {
       el("div", {}, el("label", { for: "foto", clase: "solo-lector" }, "Foto del ticket"), foto,
         // La barra de estado va fuera de la zona: un botón dentro de role="button" no se anuncia ni recibe Enter.
         el("div", { clase: "zona-contenedor" }, zona, estadoFoto), errorFoto),
-      formulario),
-    consulta);
+      formulario));
   pintarCampos();
 
   function abrir() {
@@ -244,17 +234,6 @@ export function montar(contenedor) {
         error.append(" ", el("button", { type: "button", clase: "btn sec chico",
           on: { click: () => { location.hash = `#/trabajo/${encodeURIComponent(id)}`; } } }, "Ver trabajo existente"));
       }
-    }
-  }
-
-  async function consultar(evento) {
-    evento.preventDefault();
-    errorConsulta.textContent = "";
-    try {
-      const t = await api("POST", "/consultas", { numero: numero.value.trim() });
-      location.hash = `#/trabajo/${encodeURIComponent(t.id)}`;
-    } catch (e) {
-      errorConsulta.textContent = textoDeError(e);
     }
   }
 

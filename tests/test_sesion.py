@@ -40,10 +40,8 @@ def test_cookie_abre_get_y_post_exige_header():
     c = TestClient(main.app)
     entrar(c)
     assert c.get("/configuracion").status_code == 200
-    assert c.post("/consultas", json={"numero": "123"}).status_code == 403
-    r = c.post("/consultas", json={"numero": "123"}, headers=FETCH)
-    assert r.status_code == 202
-    assert c.post(f"/facturas/{r.json()['id']}/cancelar", headers=FETCH).status_code == 200
+    assert c.post("/facturas", json={}).status_code == 403
+    assert c.post("/facturas", json={}, headers=FETCH).status_code == 422     # pasó la autenticación
 
 
 def test_salir_borra_la_cookie():
