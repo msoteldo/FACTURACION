@@ -2,12 +2,12 @@
 
 Flujo:
   1. Mandas la foto del ticket  -> el bot lee TC, TR, total y forma de pago (Gemini).
-  2. Eliges Facturar o Consultar (si la consulta dice que no está facturado, ofrece facturarlo).
+  2. Tocas Facturar (o Descartar).
   3. Para facturar, tocas G01 o G03 -> si la forma de pago no se leyó, la pregunta.
   4. El portal se llena solo    -> te llega la captura con [Facturar] [Cancelar].
   5. Te avisa el resultado (la factura llega a tu correo).
 
-Comandos: /tc, /tr (corregir), /facturar TC TR (sin foto), /consultar TC, /cancelar, /estado.
+Comandos: /tc, /tr (corregir), /facturar TC TR (sin foto), /cancelar, /estado.
 
 Se habla con la Bot API por HTTP con `requests` (sin SDK). Solo responde a los chats de
 TELEGRAM_ALLOWED_CHAT_IDS. El token nunca se escribe en logs ni en mensajes de error.
@@ -28,7 +28,7 @@ from . import extraccion
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
 from .perfil import PerfilNoDisponible
-from .portal_walmart import SolicitudConsulta, SolicitudFactura
+from .portal_walmart import SolicitudFactura
 from .trabajos import DatosIncompletos
 
 log = logging.getLogger("facturacion.telegram")
@@ -178,8 +178,6 @@ class BotFacturacion:
             return self._nuevo_pendiente(chat, {"tc_numero_ticket": partes[0],
                                                 "tr_numero_transaccion": partes[1]},
                                          accion="facturar")
-        if comando == "/consultar":
-            return self._consultar(chat, args.strip())
         if comando == "/cancelar":
             return self._cancelar(chat)
         if comando == "/estado":
@@ -236,7 +234,7 @@ class BotFacturacion:
             return self._mostrar_pendiente(chat, p)
         p = {
             "comercio": "walmart",
-            "accion": accion,  # None = preguntar si facturar o consultar
+            "accion": accion,  # None = preguntar si facturar o descartar
             "id": next(self._ids),
             "tc": re.sub(r"\s", "", str(ticket.get("tc_numero_ticket") or "")),
             "tr": re.sub(r"\s", "", str(ticket.get("tr_numero_transaccion") or "")),
@@ -317,8 +315,7 @@ class BotFacturacion:
         lineas.append("\n¿Qué quieres hacer?")
         pid = p["id"]
         self.enviar(chat, "\n".join(lineas), _teclado([
-            [("🧾 Facturar", f"a:{pid}:fac"), ("🔎 Consultar factura", f"a:{pid}:con")],
-            [("🗑 Descartar", f"x:{pid}")],
+            [("🧾 Facturar", f"a:{pid}:fac"), ("🗑 Descartar", f"x:{pid}")],
         ]))
 
     def _teclado_uso(self, p):
@@ -466,11 +463,6 @@ class BotFacturacion:
             self.enviar(chat, "🗑 Ticket descartado.")
         elif tipo == "a" and valor == "fac":
             self._pedir_uso(chat, p)
-        elif tipo == "a" and valor == "con":
-            if not p["tc"]:
-                return "No se leyó el TC; corrígelo con /tc."
-            # El ticket queda pendiente: si resulta no facturado, se ofrece facturarlo.
-            self._consultar(chat, p["tc"])
         elif tipo == "fp":
             self._pedir_forma(chat, p)
         elif tipo == "u" and valor in USOS:
@@ -500,18 +492,6 @@ class BotFacturacion:
         return None
 
     # ------------------------------------------------------------------ otros comandos
-
-    def _consultar(self, chat, numero):
-        if not re.fullmatch(r"[A-Za-z0-9-]{1,40}", numero):
-            return self.enviar(chat, "Uso: <code>/consultar TC</code>")
-        try:
-            t = self.gestor.crear("consulta", SolicitudConsulta(tc=numero), origen={"chat": chat})
-        except DatosIncompletos as e:
-            return self.enviar(chat, f"Faltan datos fiscales en el servidor: {_e(e.faltantes)}")
-        except (ValueError, PerfilNoDisponible) as e:
-            return self.enviar(chat, f"⚠️ {_e(e)}")
-        self.trabajo_de_chat[chat] = t.id
-        self.enviar(chat, "🔎 Consultando en el portal…")
 
     def _cancelar(self, chat):
         if self.pendientes.pop(chat, None):
@@ -619,10 +599,6 @@ class BotFacturacion:
         elif t.estado == "completado" and t.tipo == "factura":
             self.enviar_captura(chat, t, "11_resultado_final.png",
                                 "✅ <b>Factura generada.</b> Walmart la envía por correo (PDF y XML).")
-        elif t.estado == "completado" and t.tipo == "consulta":
-            # Si el portal no dio error, el ticket existe y ya tiene factura.
-            self.pendientes.pop(chat, None)
-            self.enviar(chat, f"✅ Este ticket ya está facturado.\nTC: <code>{_e(t.solicitud.tc)}</code>")
         elif t.estado == "completado":
             texto = _corta((t.resultado or {}).get("texto_visible", ""), 600)
             self.enviar_captura(chat, t, t.capturas[-1] if t.capturas else None,
@@ -631,15 +607,8 @@ class BotFacturacion:
             self.enviar(chat, f"✖ Cancelado. {_e(t.error or '')}\nNo se facturó nada.")
         else:
             extra = "\n⚠️ Ya se había dado clic en Facturar: revisa tu correo." if t.facturado else ""
-            teclado = None
-            p = self.pendientes.get(chat)
-            if (t.tipo == "consulta" and p and p.get("tc") == t.solicitud.tc
-                    and "no se encuentra facturado" in (t.error or "").lower()):
-                extra += "\n\nEste ticket aún no está facturado."
-                teclado = _teclado([[("🧾 Facturarlo", f"a:{p['id']}:fac"),
-                                     ("🗑 Descartar", f"x:{p['id']}")]])
             self.enviar_captura(chat, t, t.capturas[-1] if t.capturas else None,
-                                f"❌ <b>Error</b>: {_e(_corta(t.error or '', 700))}{extra}", teclado)
+                                f"❌ <b>Error</b>: {_e(_corta(t.error or '', 700))}{extra}")
 
     # ------------------------------------------------------------------ webhook
 
@@ -653,13 +622,12 @@ class BotFacturacion:
 
 
 AYUDA = """<b>Facturación de tickets</b>
-📷 Mándame la <b>foto del ticket</b> y elige <b>Facturar</b> o <b>Consultar factura</b>.
+📷 Mándame la <b>foto del ticket</b> y toca <b>Facturar</b>.
 
 /tc 123… y /tr 123… — corregir TC/TR (Sam's/Walmart)
 /folio, /id, /fecha DD/MM/AAAA, /total — corregir un ticket de OXXO
 /sucursal, /ticket, /fecha, /total — corregir un ticket de HEB
 /facturar TC TR — facturar sin foto
-/consultar TC — buscar un ticket ya facturado
 /estado — ver el último trabajo
 /cancelar — cancelar lo pendiente
 

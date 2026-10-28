@@ -51,7 +51,7 @@ def _ahora():
 class Trabajo:
     def __init__(self, tipo, solicitud, directorio):
         self.id = uuid.uuid4().hex[:12]
-        self.tipo = tipo                  # "factura" | "consulta" | "inspeccion"
+        self.tipo = tipo                  # "factura" | "inspeccion"
         self.solicitud = solicitud
         self.dir = directorio / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -174,8 +174,7 @@ class GestorTrabajos:
         with self._lock:
             if solicitud is not None:
                 for t in self.trabajos.values():
-                    # Solo se bloquea el mismo tipo: una consulta no debe esperar a que
-                    # termine (o expire) un intento de facturar el mismo ticket.
+                    # Dos trabajos del mismo tipo para el mismo ticket a la vez no tienen sentido.
                     if (t.tipo == tipo and t.estado in ACTIVOS and t.solicitud is not None
                             and t.solicitud.tc == solicitud.tc):
                         raise TrabajoDuplicado(
@@ -258,9 +257,6 @@ class GestorTrabajos:
         url = self.ajustes.walmart_url
         if t.tipo == "inspeccion":
             t.resultado = flujo.inspeccionar(url)
-        elif t.tipo == "consulta":
-            t.resultado = flujo.consultar(url, t.solicitud.tc)
-            page.wait_for_timeout(2000)  # dar chance a descargas tardías
         elif isinstance(t.solicitud, SolicitudOxxo):
             t.resultado = flujo.ejecutar(self.ajustes.oxxo_url, t.solicitud)
         elif isinstance(t.solicitud, SolicitudHeb):

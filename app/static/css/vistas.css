@@ -122,9 +122,6 @@
 .campos.llenar .campo:nth-child(4) { animation-delay: 120ms; }
 .campos.llenar .campo:nth-child(5) { animation-delay: 160ms; }
 @keyframes llenar { from { opacity: 0; transform: translateY(6px); } }
-.consulta { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
-.consulta .campo { flex: 1 1 260px; }
-.consulta .btn { margin-bottom: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .leyendo .lector { animation: none; opacity: 0.6; transform: none; }

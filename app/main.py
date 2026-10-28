@@ -8,8 +8,6 @@ Flujo típico desde un frontend (web, bot de Telegram, etc.):
                                    o la confirmación final "facturar")
   5. GET  /facturas/{id}/archivos/{nombre}  bajar XML/PDF o capturas de pantalla
 
-Para un ticket ya facturado: POST /consultas y luego los pasos 3 y 5.
-
 Todas las rutas (salvo /salud) requieren el header X-API-Key.
 """
 import logging
@@ -33,7 +31,7 @@ from .config import Ajustes
 from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
 from .portal_oxxo import SolicitudOxxo
-from .portal_walmart import SolicitudConsulta, SolicitudFactura
+from .portal_walmart import SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
 from .trabajos import DatosIncompletos, GestorTrabajos, TrabajoDuplicado
 
@@ -160,11 +158,6 @@ class NuevaFacturaHeb(BaseModel):
     uso_cfdi: Literal["G01", "G03"]
 
 
-class NuevaConsulta(BaseModel):
-    numero: str = Field(..., pattern=r"^[A-Za-z0-9-]{1,40}$",
-                        description="Número de ticket (TC#) o folio de la factura")
-
-
 class Respuesta(BaseModel):
     pregunta_id: int = Field(..., description="El 'id' de la pregunta vigente (evita responder una pregunta vieja)")
     respuesta: str = Field(..., description="Una de las 'opciones' de la pregunta")
@@ -254,14 +247,6 @@ def crear_factura_heb(body: NuevaFacturaHeb):
     sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
     return _crear("factura", sol)
-
-
-@app.post("/consultas", status_code=202, dependencies=protegido)
-def crear_consulta(body: NuevaConsulta):
-    """Busca un ticket YA facturado en "Consulta o reenvía tu factura" y descarga el
-    XML/PDF si el portal lo ofrece. No factura ni reenvía nada. El avance y los archivos
-    se ven igual que una factura: GET /facturas/{id}."""
-    return _crear("consulta", SolicitudConsulta(tc=body.numero))
 
 
 @app.post("/diagnostico/portal", status_code=202, dependencies=protegido)

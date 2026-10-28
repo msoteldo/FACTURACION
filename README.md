@@ -40,7 +40,7 @@ Pantallas de la app:
 
 - **Nueva factura:** arrastra o elige la foto del ticket (también con teclado). Mientras la IA la lee,
   una franja recorre la foto; luego se elige el comercio (Sam's/Walmart, OXXO o HEB) y los campos dudosos
-  quedan marcados. Si no se lee, se captura a mano. Abajo está "¿Ya facturaste este ticket?" (Walmart).
+  quedan marcados. Si no se lee, se captura a mano.
 - **Trabajo:** línea de pasos, la pregunta del portal con sus capturas y un reloj que usa la hora de
   expiración del servidor. "Facturar" abre una confirmación dentro de la página (razón social y RFC);
   Escape la cancela. Al facturar se "imprime" el comprobante.
@@ -67,7 +67,6 @@ cookie de sesión de la webapp. En `/docs` está Swagger UI (botón **Authorize*
 | POST | `/facturas/{id}/respuesta` | `{"pregunta_id": n, "respuesta": "<una de las opciones>"}` |
 | POST | `/facturas/{id}/cancelar` | cancela (solo antes del clic en Facturar) |
 | GET | `/facturas/{id}/archivos/{nombre}` | descarga XML/PDF o capturas `.png` |
-| POST | `/consultas` | `{"numero": "<TC# o folio>"}`: busca un ticket **ya facturado** en "Consulta o reenvía tu factura" y descarga el XML/PDF. No factura ni reenvía nada; el avance se ve con `GET /facturas/{id}` |
 | POST / DELETE | `/sesion` | login de la webapp (`{"password": "<API_KEY>"}`) y salir |
 | GET / PUT | `/perfil` | datos fiscales vigentes (`origen`: `base` o `entorno`) y editarlos (requiere `DATABASE_URL`) |
 | POST | `/diagnostico/portal` | abre el portal en headless y lista campos (equivale a `--inspect`) |
@@ -174,10 +173,10 @@ necesita otro servidor: cada mensaje despierta al servicio si estaba dormido.
 4. Pon ese id en `TELEGRAM_ALLOWED_CHAT_IDS` (varios, separados por coma) y guarda.
 5. Manda la foto de un ticket.
 
-Uso: foto → **🧾 Facturar** o **🔎 Consultar factura** → (para facturar) **G01 / G03** →
+Uso: foto → **🧾 Facturar** → **G01 / G03** →
 (forma de pago si no se leyó) → captura con **✅ Facturar / ✖ Cancelar** → aviso final.
-Si la consulta dice que el ticket no está facturado, el aviso trae **🧾 Facturarlo**. Comandos: `/tc`, `/tr` (corregir lo leído),
-`/facturar TC TR`, `/consultar TC`, `/estado`, `/cancelar`, `/ayuda`.
+Comandos: `/tc`, `/tr` (corregir lo leído),
+`/facturar TC TR`, `/estado`, `/cancelar`, `/ayuda`.
 
 Si el bot no responde: `POST /telegram/configurar` (con tu API key) vuelve a registrar el
 webhook y muestra el último error que reportó Telegram.
