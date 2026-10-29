@@ -10,6 +10,7 @@ Flujo típico desde un frontend (web, bot de Telegram, etc.):
 
 Todas las rutas (salvo /salud) requieren el header X-API-Key.
 """
+import hashlib
 import logging
 from contextlib import asynccontextmanager
 import secrets
@@ -39,6 +40,11 @@ from .trabajos import DatosIncompletos, GestorTrabajos, TrabajoDuplicado
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 ajustes = Ajustes.desde_env()
+# Diagnóstico sin exponer el valor: longitud y 8 hex de SHA-256 de la API_KEY que cargó el proceso.
+_ak = ajustes.api_key
+logging.getLogger("facturacion").info(
+    "API_KEY cargada: len=%d sha8=%s", len(_ak),
+    hashlib.sha256(_ak.encode()).hexdigest()[:8] if _ak else "VACIA")
 if ajustes.database_url:
     db.iniciar(ajustes.database_url)
 gestor = GestorTrabajos(ajustes, obtener_datos)
