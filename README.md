@@ -8,8 +8,6 @@ Reglas de diseño que el código respeta:
 
 - **El clic final en "Facturar" siempre lo aprueba una persona.** No hay parámetro
   para saltarlo: el trabajo se pausa y espera `respuesta = "facturar"`.
-- **Nunca se intenta resolver un captcha.** Si aparece uno visible, el trabajo se pausa
-  con una pregunta `captcha` (opciones `reintentar` / `cancelar`) y una captura de pantalla.
 - **Las claves solo vienen de variables de entorno** (secretos en Render). Los datos fiscales
   también, salvo que se editen desde la webapp (se guardan en Postgres). Nada va hardcodeado
   ni en el repo.
