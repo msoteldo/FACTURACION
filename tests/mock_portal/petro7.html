@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Portal simulado de Petro Seven</title></head>
+<body>
+<!-- Simula los atributos (ng-model / ng-click / ids) y avisos (window.alert) del portal real
+     de Petro Seven para las pruebas. No es una copia del portal ni usa AngularJS.
+     Variantes por query string: ?bloqueo=1 (página del detector de bots), ?rfc=XXX (RFC de la cuenta). -->
+<div id="app"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const app = document.getElementById("app");
+const USUARIO = "club@example.com", PASSWORD = "secreto";
+window.__facturado = 0;
+
+if (q.get("bloqueo")) {
+  app.innerHTML = `<h1>We apologize for the inconvenience...</h1>
+    <p>...but your activity and behavior on this site made us think that you are a bot.</p>
+    <p>ANOMALY DETECTED</p><p>Please solve this CAPTCHA to request unblock to the website</p>`;
+} else {
+  app.innerHTML = `
+    <div id="banner">
+      <input id="rfc" name="email" ng-model="email" type="text" placeholder="USER ID (EMAIL)">
+      <input id="password" name="password" ng-model="password" type="password" placeholder="CONTRASEÑA">
+      <input type="button" ng-click="bannerCtrl.loginUser()" value="Entrar">
+    </div>
+    <div id="menu" hidden><a href="#" id="menu_facturar">Facturar</a></div>
+    <div id="facturar" hidden>
+      <input name="noEstacion" ng-model="selectedEmployee.noEstacion" type="text">
+      <input name="noTicket" ng-model="selectedEmployee.noTicket" type="text">
+      <input name="wid" ng-model="selectedEmployee.wid" type="text">
+      <md-datepicker name="fechaTicket" ng-model="selectedEmployee.fechaTicket"><input class="md-datepicker-input"></md-datepicker>
+      <input type="button" ng-click="addRow()" value="Agregar Ticket">
+      <table><tbody id="tickets"></tbody></table>
+      <input id="rfcCliente" ng-model="rfcCliente" type="text">
+      <input id="razon" ng-model="razon" type="text">
+      <select id="regimenFiscalReceptor"><option>601 - General de Ley Personas Morales</option></select>
+      <span id="pago"></span>
+      <select id="usoCfdi"><option value="">--Seleccione--</option>
+        <option>G01 - Adquisición de mercancías</option><option>G03 - Gastos en general</option></select>
+      <input id="cp" ng-model="cp" type="text" value="01000">
+      <input id="emailInput" ng-model="emailInput" type="text" value="facturas@example.com">
+      <input type="button" ng-click="facturacionCtrl.facturarTicket(facturacionForm.$valid)" value="Facturar">
+    </div>
+    <div id="resultado" hidden><p>Su factura ha sido generada y enviada a su correo electrónico.</p></div>`;
+
+  const $ = (s) => document.querySelector(s);
+  $("[ng-click='bannerCtrl.loginUser()']").onclick = () => {
+    setTimeout(() => {
+      if ($("#rfc").value !== USUARIO || $("#password").value !== PASSWORD) {
+        alert("El usuario o la contraseña son incorrectos.");
+        return;
+      }
+      $("#banner").hidden = true;
+      $("#menu").hidden = false;
+    }, 300);
+  };
+  $("#menu_facturar").onclick = (e) => {
+    e.preventDefault();
+    $("#facturar").hidden = false;
+    $("#rfcCliente").value = q.get("rfc") || "CPA010101AB1";
+    $("#razon").value = "CLUB DE PADEL DE PRUEBA";
+  };
+  $("[ng-click='addRow()']").onclick = () => {
+    const folio = $("[name=noTicket]").value;
+    const fecha = $("md-datepicker input").value;
+    if (!$("[name=noEstacion]").value) return alert("Debe ingresar el número de Estación.");
+    if (!$("[name=wid]").value) return alert("Debe ingresar el WEB ID.");
+    if (!fecha) return alert("Debe ingresar la Fecha de Ticket.");
+    setTimeout(() => {
+      if (folio.startsWith("000")) return alert("El ticket ya se encuentra facturado.");
+      const tr = document.createElement("tr");
+      tr.textContent = `${$("[name=noEstacion]").value} ${folio} ${$("[name=wid]").value} ${fecha}`;
+      $("#tickets").appendChild(tr);
+      // Como el portal real: en tickets chicos (p. ej. efectivo) no se elige forma de pago.
+      $("#pago").innerHTML = folio.startsWith("55")
+        ? '<input id="formaPagoAux" type="text" value="Efectivo" readonly>'
+        : '<select id="formaPago"><option value="">--Seleccione--</option><option>Tarjeta de crédito</option><option>Tarjeta de débito</option></select>';
+      $("[name=noEstacion]").value = $("[name=noTicket]").value = $("[name=wid]").value = "";
+    }, 300);
+  };
+  $("[ng-click^='facturacionCtrl.facturarTicket']").onclick = () => {
+    if (!$("#usoCfdi").value) return alert("Debe seleccionar el uso del CFDI");
+    if ($("#formaPago") && !$("#formaPago").value) return alert("Debe seleccionar una forma de pago");
+    window.__facturado += 1;
+    $("#facturar").hidden = true;
+    $("#resultado").hidden = false;
+  };
+}
+</script>
+</body>
+</html>

@@ -55,3 +55,8 @@ services:
         sync: false
       - key: OXXO_PASSWORD
         sync: false
+      # Petro Seven: cuenta del portal (con sesión iniciada no pide captcha)
+      - key: PETRO7_USUARIO
+        sync: false
+      - key: PETRO7_PASSWORD
+        sync: false

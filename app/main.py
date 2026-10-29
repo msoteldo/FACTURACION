@@ -30,6 +30,7 @@ from . import db, extraccion, perfil, sesion
 from .config import Ajustes
 from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
+from .portal_petro7 import SolicitudPetro7
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
@@ -150,6 +151,16 @@ class NuevaFacturaOxxo(BaseModel):
     uso_cfdi: Literal["G01", "G03"]
 
 
+class NuevaFacturaPetro7(BaseModel):
+    estacion: str = Field(..., pattern=r"^\d{1,8}$", description="No. de estación del ticket")
+    folio: str = Field(..., pattern=r"^\d{1,15}$", description="Folio (número de ticket)")
+    web_id: str = Field(..., pattern=r"^[A-Za-z0-9]{1,20}$", description="Web ID impreso en el ticket")
+    fecha: date = Field(..., description="Fecha del ticket (AAAA-MM-DD)")
+    uso_cfdi: Literal["G01", "G03"]
+    forma_pago: Literal["", "04", "28"] = Field(
+        "", description="04 = crédito, 28 = débito (solo si el portal la pide; vacío = la define el ticket)")
+
+
 class NuevaFacturaHeb(BaseModel):
     sucursal: str = Field(..., pattern=r"^\d{1,6}$", description="Código de sucursal (p. ej. 2950)")
     ticket: str = Field(..., pattern=r"^\d{1,12}$", description="Número de ticket")
@@ -247,6 +258,47 @@ def crear_factura_heb(body: NuevaFacturaHeb):
     sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
     return _crear("factura", sol)
+
+
+@app.post("/facturas/petro7", status_code=202, dependencies=protegido)
+def crear_factura_petro7(body: NuevaFacturaPetro7):
+    """Factura un ticket de Petro Seven con la cuenta configurada (PETRO7_USUARIO y
+    PETRO7_PASSWORD). Se detiene a confirmar ANTES de 'Facturar', que emite la factura de
+    inmediato. El avance se ve con GET /facturas/{id}."""
+    sol = SolicitudPetro7(estacion=body.estacion, folio=body.folio, web_id=body.web_id.upper(),
+                          fecha=body.fecha, uso_cfdi=body.uso_cfdi, forma_pago=body.forma_pago)
+    return _crear("factura", sol)
+
+
+@app.get("/diagnostico/petro7", dependencies=protegido)
+def diagnostico_petro7():
+    """Prueba de solo lectura (sin credenciales): abre el portal de Petro Seven desde este
+    servidor y reporta si carga el login o la pantalla de "bot detectado". Sirve para saber,
+    antes de construir el flujo, si la IP de Render pasa el detector de bots del portal."""
+    from playwright.sync_api import sync_playwright
+
+    url = "https://tarjetapetro-7.com.mx/KPortalExterno/"
+    resultado = {"url": url}
+    with sync_playwright() as p:
+        navegador = gestor._lanzar(p)
+        try:
+            ctx = navegador.new_context(locale="es-MX", timezone_id="America/Mexico_City",
+                                        viewport={"width": 1366, "height": 900})
+            pagina = ctx.new_page()
+            try:
+                pagina.goto(url, timeout=60000)
+                pagina.wait_for_timeout(5000)
+            except Exception as e:
+                resultado["error"] = f"{type(e).__name__}: {e}"[:300]
+            resultado["titulo"] = pagina.title()
+            texto = pagina.locator("body").inner_text()[:2000].lower()
+            marcas_bot = ("anomaly detected", "are a bot", "unblock", "captcha", "incident id")
+            resultado["bloqueado"] = any(m in texto for m in marcas_bot)
+            resultado["login_visible"] = pagina.locator("#rfc, #password").count() > 0
+            resultado["texto"] = pagina.locator("body").inner_text()[:600]
+        finally:
+            navegador.close()
+    return resultado
 
 
 @app.post("/diagnostico/portal", status_code=202, dependencies=protegido)

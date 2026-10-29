@@ -95,6 +95,9 @@ class Ajustes:
     oxxo_usuario: str
     oxxo_password: str
     heb_url: str
+    petro7_url: str
+    petro7_usuario: str
+    petro7_password: str
     database_url: str
 
     @classmethod
@@ -131,6 +134,10 @@ class Ajustes:
             oxxo_usuario=_env("OXXO_USUARIO"),
             oxxo_password=os.environ.get("OXXO_PASSWORD", ""),  # sin strip: puede tener espacios
             heb_url=_env("HEB_URL", "https://facturacion.heb.com.mx/cli/invoice-create/"),
+            petro7_url=_env("PETRO7_URL", "https://tarjetapetro-7.com.mx/KPortalExterno/"),
+            # Cuenta del portal de Petro Seven: con sesión iniciada el portal no pide captcha.
+            petro7_usuario=_env("PETRO7_USUARIO"),
+            petro7_password=os.environ.get("PETRO7_PASSWORD", ""),  # sin strip: puede tener espacios
             # Postgres (Neon) para guardar los datos fiscales editados desde la web. Vacío = sin base.
             database_url=_env("DATABASE_URL"),
         )

@@ -121,6 +121,20 @@ factura"**, que emite la factura de inmediato; el portal real habilita ese botó
 campos, así que se validan antes. HEB envía la factura al correo capturado. Solo se factura
 hasta el último día del mes de la compra.
 
+## Petro Seven
+
+`POST /facturas/petro7` con `{"estacion": "10452", "folio": "1234567", "web_id": "A1B2C3",
+"fecha": "AAAA-MM-DD", "uso_cfdi": "G01", "forma_pago": "28"}`. `forma_pago` (04 crédito, 28 débito)
+solo se usa si el portal la pide; con tickets que la definen solos (p. ej. efectivo) va vacía.
+
+El flujo (`app/portal_petro7.py`) inicia sesión con `PETRO7_USUARIO` / `PETRO7_PASSWORD` (con sesión
+el portal no pide captcha), captura estación, folio, Web ID y fecha, da **Agregar Ticket** (solo
+valida) y se detiene a confirmar **antes de "Facturar"**, que emite la factura de inmediato. Los datos
+fiscales salen de la cuenta de Petro Seven; si su RFC no coincide con el configurado, se pregunta.
+
+El portal tiene un detector de bots que bloquea redes de centros de datos. Si aparece su página de
+bloqueo, el trabajo termina con error y ese ticket se factura a mano: no se intenta pasar el bloqueo.
+
 ## Despliegue en Render (plan gratis)
 
 1. Sube este repo a GitHub (sin `.env`).
