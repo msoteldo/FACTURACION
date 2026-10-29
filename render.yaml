@@ -9,7 +9,7 @@ services:
     healthCheckPath: /salud
     envVars:
       - key: API_KEY
-        generateValue: true   # Render genera una clave aleatoria; cópiala para tu frontend
+        sync: false   # la defines TÚ en Environment; el blueprint no la toca (antes: generateValue, que se regeneraba al resincronizar)
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
