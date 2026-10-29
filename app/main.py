@@ -270,6 +270,37 @@ def crear_factura_petro7(body: NuevaFacturaPetro7):
     return _crear("factura", sol)
 
 
+@app.get("/diagnostico/petro7", dependencies=protegido)
+def diagnostico_petro7():
+    """Prueba de solo lectura (sin credenciales): abre el portal de Petro Seven desde este
+    servidor y reporta si carga el login o la pantalla de "bot detectado". Sirve para saber,
+    antes de construir el flujo, si la IP de Render pasa el detector de bots del portal."""
+    from playwright.sync_api import sync_playwright
+
+    url = "https://tarjetapetro-7.com.mx/KPortalExterno/"
+    resultado = {"url": url}
+    with sync_playwright() as p:
+        navegador = gestor._lanzar(p)
+        try:
+            ctx = navegador.new_context(locale="es-MX", timezone_id="America/Mexico_City",
+                                        viewport={"width": 1366, "height": 900})
+            pagina = ctx.new_page()
+            try:
+                pagina.goto(url, timeout=60000)
+                pagina.wait_for_timeout(5000)
+            except Exception as e:
+                resultado["error"] = f"{type(e).__name__}: {e}"[:300]
+            resultado["titulo"] = pagina.title()
+            texto = pagina.locator("body").inner_text()[:2000].lower()
+            marcas_bot = ("anomaly detected", "are a bot", "unblock", "captcha", "incident id")
+            resultado["bloqueado"] = any(m in texto for m in marcas_bot)
+            resultado["login_visible"] = pagina.locator("#rfc, #password").count() > 0
+            resultado["texto"] = pagina.locator("body").inner_text()[:600]
+        finally:
+            navegador.close()
+    return resultado
+
+
 @app.post("/diagnostico/portal", status_code=202, dependencies=protegido)
 def diagnosticar_portal():
     """Abre el portal en modo headless y lista campos/botones (equivale a --inspect).
