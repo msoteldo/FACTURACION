@@ -22,6 +22,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 from .portal_heb import FlujoHeb, SolicitudHeb
+from .portal_petro7 import FlujoPetro7, SolicitudPetro7
 from .portal_oxxo import FlujoOxxo, SolicitudOxxo
 from .portal_walmart import FlujoCancelado, FlujoError, FlujoWalmart
 
@@ -261,6 +262,8 @@ class GestorTrabajos:
             t.resultado = flujo.ejecutar(self.ajustes.oxxo_url, t.solicitud)
         elif isinstance(t.solicitud, SolicitudHeb):
             t.resultado = flujo.ejecutar(self.ajustes.heb_url, t.solicitud)
+        elif isinstance(t.solicitud, SolicitudPetro7):
+            t.resultado = flujo.ejecutar(self.ajustes.petro7_url, t.solicitud)
         else:
             t.resultado = flujo.ejecutar(url, t.solicitud)
             page.wait_for_timeout(2000)
@@ -301,6 +304,9 @@ class GestorTrabajos:
                                               self.ajustes.oxxo_password)
                         elif isinstance(t.solicitud, SolicitudHeb):
                             flujo = FlujoHeb(page, t.datos, ui)
+                        elif isinstance(t.solicitud, SolicitudPetro7):
+                            flujo = FlujoPetro7(page, t.datos, ui, self.ajustes.petro7_usuario,
+                                                self.ajustes.petro7_password)
                         else:
                             flujo = FlujoWalmart(page, t.datos, ui)
                         try:

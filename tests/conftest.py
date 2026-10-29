@@ -9,11 +9,13 @@ import pytest
 MOCK = Path(__file__).parent / "mock_portal" / "index.html"
 MOCK_OXXO = Path(__file__).parent / "mock_portal" / "oxxo.html"
 MOCK_HEB = Path(__file__).parent / "mock_portal" / "heb.html"
+MOCK_PETRO7 = Path(__file__).parent / "mock_portal" / "petro7.html"
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # la SPA simulada responde el mismo HTML en cualquier ruta
-        mock = MOCK_OXXO if self.path.startswith("/oxxo") else MOCK_HEB if self.path.startswith("/heb") else MOCK
+        mock = (MOCK_OXXO if self.path.startswith("/oxxo") else MOCK_HEB if self.path.startswith("/heb")
+                else MOCK_PETRO7 if self.path.startswith("/petro7") else MOCK)
         cuerpo = mock.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -39,6 +41,9 @@ os.environ.update({
     "WALMART_URL": f"http://127.0.0.1:{_servidor.server_port}/ticket",
     "OXXO_URL": f"http://127.0.0.1:{_servidor.server_port}/oxxo/inicio.do",
     "HEB_URL": f"http://127.0.0.1:{_servidor.server_port}/heb/cli/invoice-create/",
+    "PETRO7_URL": f"http://127.0.0.1:{_servidor.server_port}/petro7/KPortalExterno/",
+    "PETRO7_USUARIO": "club@example.com",
+    "PETRO7_PASSWORD": "secreto",
     "OXXO_USUARIO": "club@example.com",
     "OXXO_PASSWORD": "secreto",
     "RFC": "CPA010101AB1",

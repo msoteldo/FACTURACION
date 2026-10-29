@@ -30,6 +30,7 @@ from . import db, extraccion, perfil, sesion
 from .config import Ajustes
 from .perfil import PerfilNoDisponible, obtener_datos
 from .portal_heb import SolicitudHeb
+from .portal_petro7 import SolicitudPetro7
 from .portal_oxxo import SolicitudOxxo
 from .portal_walmart import SolicitudFactura
 from .telegram_bot import BotFacturacion, TelegramError
@@ -150,6 +151,16 @@ class NuevaFacturaOxxo(BaseModel):
     uso_cfdi: Literal["G01", "G03"]
 
 
+class NuevaFacturaPetro7(BaseModel):
+    estacion: str = Field(..., pattern=r"^\d{1,8}$", description="No. de estación del ticket")
+    folio: str = Field(..., pattern=r"^\d{1,15}$", description="Folio (número de ticket)")
+    web_id: str = Field(..., pattern=r"^[A-Za-z0-9]{1,20}$", description="Web ID impreso en el ticket")
+    fecha: date = Field(..., description="Fecha del ticket (AAAA-MM-DD)")
+    uso_cfdi: Literal["G01", "G03"]
+    forma_pago: Literal["", "04", "28"] = Field(
+        "", description="04 = crédito, 28 = débito (solo si el portal la pide; vacío = la define el ticket)")
+
+
 class NuevaFacturaHeb(BaseModel):
     sucursal: str = Field(..., pattern=r"^\d{1,6}$", description="Código de sucursal (p. ej. 2950)")
     ticket: str = Field(..., pattern=r"^\d{1,12}$", description="Número de ticket")
@@ -246,6 +257,16 @@ def crear_factura_heb(body: NuevaFacturaHeb):
     la factura de inmediato. El avance se ve con GET /facturas/{id}."""
     sol = SolicitudHeb(sucursal=str(int(body.sucursal)), ticket=body.ticket, fecha=body.fecha,
                        total=round(body.total, 2), uso_cfdi=body.uso_cfdi)
+    return _crear("factura", sol)
+
+
+@app.post("/facturas/petro7", status_code=202, dependencies=protegido)
+def crear_factura_petro7(body: NuevaFacturaPetro7):
+    """Factura un ticket de Petro Seven con la cuenta configurada (PETRO7_USUARIO y
+    PETRO7_PASSWORD). Se detiene a confirmar ANTES de 'Facturar', que emite la factura de
+    inmediato. El avance se ve con GET /facturas/{id}."""
+    sol = SolicitudPetro7(estacion=body.estacion, folio=body.folio, web_id=body.web_id.upper(),
+                          fecha=body.fecha, uso_cfdi=body.uso_cfdi, forma_pago=body.forma_pago)
     return _crear("factura", sol)
 
 
