@@ -72,3 +72,18 @@ def test_valida_parametros_heb():
     r = client.post("/facturas/heb", headers=H, json={
         "sucursal": "29x", "ticket": "12a", "fecha": "2026-10-03", "total": 0, "uso_cfdi": "G02"})
     assert r.status_code == 422
+
+
+def test_el_error_incluye_el_diagnostico_de_ia(monkeypatch):
+    from app import diagnostico
+    monkeypatch.setattr(diagnostico, "diagnosticar", lambda *a, **k: "Revisa el botón Continuar.")
+    t = esperar_estado(nueva_heb(ticket="0001")["id"], {"error", "esperando_respuesta"})
+    assert "Diagnóstico de IA (sugerencia, sin verificar): Revisa el botón Continuar." in t["error"]
+
+
+def test_ticket_con_cero_a_la_izquierda_se_reconoce_en_la_lista():
+    # El portal lista "033682" como "33682".
+    t = esperar_estado(nueva_heb(ticket="0800544")["id"], {"error", "esperando_respuesta"})
+    assert t["estado"] == "esperando_respuesta", t.get("error")
+    responder(t, "cancelar")
+    esperar_estado(t["id"], {"cancelado", "error", "completado"})

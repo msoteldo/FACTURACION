@@ -44,13 +44,6 @@ class FlujoHeb(FlujoWalmart):
     def campo(self, etiqueta):
         return self.page.get_by_label(etiqueta, exact=True)
 
-    def texto_pagina(self):
-        """Texto visible resumido, para diagnosticar cuando el portal cambia."""
-        try:
-            return " ".join(self.page.inner_text("body").split())[:300]
-        except Exception:
-            return "?"
-
     def mensajes_error(self):
         return self.page.evaluate(
             """sel => Array.from(document.querySelectorAll(sel)).filter(e => e.offsetWidth > 0)
@@ -130,14 +123,17 @@ class FlujoHeb(FlujoWalmart):
         esperar(self.page, 1000)
         # El texto visible de la página (innerText) ignora elementos ocultos y duplicados responsivos,
         # que hacían fallar un locator con .first. Los inputs no cuentan: su valor no es texto.
+        # El portal muestra el número sin ceros a la izquierda ("033682" se lista como "33682").
+        mostrado = sol.ticket.lstrip("0") or "0"
         try:
             self.page.wait_for_function(
-                "t => document.body.innerText.includes(t)", arg=sol.ticket, timeout=8000)
+                "t => new RegExp('(^|\\\\D)' + t + '(\\\\D|$)').test(document.body.innerText)",
+                arg=mostrado, timeout=8000)
         except PWTimeout:
             msgs = self.mensajes_error()
             self.fallar("El portal no agregó el ticket a la lista"
                         + (f": {' '.join(msgs)}" if msgs else ".")
-                        + f" (buscado: {sol.ticket!r}; página: {self.texto_pagina()})", "03_agregar_error")
+                        + f" (buscado: {sol.ticket!r}; página: {self.texto_visible(300)})", "03_agregar_error")
         # "Continuar" valida el ticket y pasa a datos fiscales; no factura.
         self.page.locator("button:has-text('Continuar')").click()
         try:
