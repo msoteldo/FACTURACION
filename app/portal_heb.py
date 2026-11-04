@@ -44,6 +44,13 @@ class FlujoHeb(FlujoWalmart):
     def campo(self, etiqueta):
         return self.page.get_by_label(etiqueta, exact=True)
 
+    def texto_pagina(self):
+        """Texto visible resumido, para diagnosticar cuando el portal cambia."""
+        try:
+            return " ".join(self.page.inner_text("body").split())[:300]
+        except Exception:
+            return "?"
+
     def mensajes_error(self):
         return self.page.evaluate(
             """sel => Array.from(document.querySelectorAll(sel)).filter(e => e.offsetWidth > 0)
@@ -122,13 +129,14 @@ class FlujoHeb(FlujoWalmart):
         self.page.locator("button:has-text('Agregar ticket')").click()
         esperar(self.page, 1000)
         # El portal real no siempre usa <table> (puede ser mat-table con divs): se busca en toda la página.
-        fila = self.page.get_by_text(sol.ticket, exact=True)
+        fila = self.page.get_by_text(sol.ticket)
         try:
             fila.first.wait_for(state="visible", timeout=8000)
         except PWTimeout:
             msgs = self.mensajes_error()
             self.fallar("El portal no agregó el ticket a la lista"
-                        + (f": {' '.join(msgs)}" if msgs else "."), "03_agregar_error")
+                        + (f": {' '.join(msgs)}" if msgs else ".")
+                        + f" (buscado: {sol.ticket!r}; página: {self.texto_pagina()})", "03_agregar_error")
         # "Continuar" valida el ticket y pasa a datos fiscales; no factura.
         self.page.locator("button:has-text('Continuar')").click()
         try:
