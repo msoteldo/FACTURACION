@@ -14,6 +14,8 @@ from typing import Optional
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
+from . import diagnostico
+
 # Nombres de los inputs de /ticket.
 CAMPOS_TICKET = {
     "MEMBRESIA_O_RFC": "membershipOrRFC",
@@ -198,7 +200,15 @@ class FlujoWalmart:
     def fallar(self, mensaje, captura):
         self.ui.captura(self.page, captura)
         texto = self.texto_visible()
-        raise FlujoError(f"{mensaje}\nTexto visible en el portal:\n{texto}" if texto else mensaje)
+        completo = f"{mensaje}\nTexto visible en el portal:\n{texto}" if texto else mensaje
+        try:
+            png = self.page.screenshot(type="png", timeout=5000)
+        except Exception:
+            png = None
+        ia = diagnostico.diagnosticar(type(self).__name__.removeprefix("Flujo"), mensaje, texto, png)
+        if ia:
+            completo += f"\nDiagnóstico de IA (sugerencia, sin verificar): {ia}"
+        raise FlujoError(completo)
 
     def en_pantalla(self, nombre, timeout_ms=10000):
         """Espera a que el portal muestre la pantalla `nombre` (ver PANTALLAS)."""

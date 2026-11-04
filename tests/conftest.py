@@ -38,6 +38,7 @@ JOBS_DIR = f"/tmp/facturacion_jobs_tests_{os.environ.get('PYTEST_XDIST_WORKER', 
 os.environ.update({
     "API_KEY": "clave-de-prueba",
     "GEMINI_API_KEY": "gemini-de-prueba",
+    "DIAGNOSTICO_IA": "0",
     "WALMART_URL": f"http://127.0.0.1:{_servidor.server_port}/ticket",
     "OXXO_URL": f"http://127.0.0.1:{_servidor.server_port}/oxxo/inicio.do",
     "HEB_URL": f"http://127.0.0.1:{_servidor.server_port}/heb/cli/invoice-create/",

@@ -149,7 +149,7 @@ $("agregar").onclick = () => {
   lista = [{ s, t, f, v }];
   $("lista").hidden = false;
   $("lista").querySelector(".filas").innerHTML =
-    `<div role="row"><span role="cell">${s}</span><span role="cell"> ${t} </span><span role="cell">${f}</span><span role="cell">$ ${Number(v).toFixed(2)}</span></div>`;
+    `<div role="row"><span role="cell">${s}</span><span role="cell"> ${Number(t)} </span><span role="cell">${f}</span><span role="cell">$ ${Number(v).toFixed(2)}</span></div>`;
 };
 
 $("continuar").onclick = () => {

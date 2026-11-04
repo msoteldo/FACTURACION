@@ -79,7 +79,7 @@ class ExtraccionError(Exception):
         self.detalle = detalle
 
 
-def _llamar_gemini(api_key, modelo, body, reintentos, espera_base):
+def _llamar_gemini(api_key, modelo, body, reintentos, espera_base, timeout=60):
     url = URL_BASE.format(modelo=modelo)
     for intento in range(reintentos + 1):
         try:
@@ -87,7 +87,7 @@ def _llamar_gemini(api_key, modelo, body, reintentos, espera_base):
                 url,
                 headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
                 json=body,
-                timeout=60,
+                timeout=timeout,
             )
         except requests.RequestException as e:
             if intento < reintentos:
