@@ -203,7 +203,10 @@ class FlujoHeb(FlujoWalmart):
         esperar(self.page, 1000)
         self.ui.captura(self.page, "06_resultado_final")
         texto_final = self.texto_visible(1200)
-        if "generada correctamente" not in texto_final.lower():
+        # Espacios de cualquier tipo (p. ej. &nbsp;) cuentan igual; se revisa toda la página, y la
+        # tabla de resultado con estado VIGENTE también confirma la factura.
+        plano = _normaliza(" ".join(self.texto_visible(6000).split()))
+        if "generada correctamente" not in plano and not ("serie-folio" in plano and "vigente" in plano):
             self.fallar("La pantalla final de HEB no confirma la factura.", "06_resultado_dudoso")
         resultado = self.page.locator("table:has(th:has-text('Serie-Folio')) tbody tr").first
         fila = [c.strip() for c in resultado.locator("td").all_inner_texts()]
