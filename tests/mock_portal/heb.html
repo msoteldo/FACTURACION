@@ -36,8 +36,8 @@
   <mat-form-field><label for="mat-input-3">Venta</label>
     <input id="mat-input-3" type="number"></mat-form-field>
   <button type="button" id="agregar"><span>add_circle_outline</span>Agregar ticket</button>
-  <table id="lista" hidden><thead><tr><th>Sucursal</th><th>No. ticket</th><th>Fecha ticket</th><th>Venta</th></tr></thead>
-    <tbody></tbody></table>
+  <div id="lista" role="table" hidden><div role="row"><span role="columnheader">Sucursal</span><span role="columnheader">No. ticket</span><span role="columnheader">Fecha ticket</span><span role="columnheader">Venta</span></div>
+    <div class="filas"></div></div>
   <button type="button" id="cancelar1">Cancelar</button>
   <button type="button" id="continuar">Continuar</button>
   <div id="mensajes"></div>
@@ -148,8 +148,8 @@ $("agregar").onclick = () => {
   if (!SUCURSALES.includes(s) || !t || !f || !v) { error("Captura sucursal, ticket, fecha y venta"); return; }
   lista = [{ s, t, f, v }];
   $("lista").hidden = false;
-  $("lista").querySelector("tbody").innerHTML =
-    `<tr><td>${s}</td><td>${t}</td><td>${f}</td><td>$ ${Number(v).toFixed(2)}</td></tr>`;
+  $("lista").querySelector(".filas").innerHTML =
+    `<div role="row"><span role="cell">${s}</span><span role="cell"> ${t} </span><span role="cell">${f}</span><span role="cell">$ ${Number(v).toFixed(2)}</span></div>`;
 };
 
 $("continuar").onclick = () => {
