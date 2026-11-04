@@ -128,10 +128,11 @@ class FlujoHeb(FlujoWalmart):
 
         self.page.locator("button:has-text('Agregar ticket')").click()
         esperar(self.page, 1000)
-        # El portal real no siempre usa <table> (puede ser mat-table con divs): se busca en toda la página.
-        fila = self.page.get_by_text(sol.ticket)
+        # El texto visible de la página (innerText) ignora elementos ocultos y duplicados responsivos,
+        # que hacían fallar un locator con .first. Los inputs no cuentan: su valor no es texto.
         try:
-            fila.first.wait_for(state="visible", timeout=8000)
+            self.page.wait_for_function(
+                "t => document.body.innerText.includes(t)", arg=sol.ticket, timeout=8000)
         except PWTimeout:
             msgs = self.mensajes_error()
             self.fallar("El portal no agregó el ticket a la lista"
