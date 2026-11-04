@@ -12,6 +12,7 @@ Pantallas (https://facturacion.heb.com.mx/cli/...):
 La confirmación humana va ANTES de "Generar factura"; desde ese clic el trabajo se marca
 como facturado.
 """
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -42,7 +43,8 @@ class SolicitudHeb:
 
 class FlujoHeb(FlujoWalmart):
     def campo(self, etiqueta):
-        return self.page.get_by_label(etiqueta, exact=True)
+        # La etiqueta real puede traer el contador del campo ("Código Postal 0 / 5").
+        return self.page.get_by_label(re.compile(rf"^\s*{re.escape(etiqueta)}(\s+\d+\s*/\s*\d+)?\s*$"))
 
     def mensajes_error(self):
         return self.page.evaluate(
@@ -222,6 +224,11 @@ class FlujoHeb(FlujoWalmart):
         esperar(self.page, 1000)
         self.cerrar_aviso()
         self.ui.captura(self.page, "01_formulario")
-        self.pantalla_ticket_heb(sol)
-        self.llenar_datos_fiscales(sol)
+        try:
+            self.pantalla_ticket_heb(sol)
+            self.llenar_datos_fiscales(sol)
+        except PWTimeout as e:
+            # Un control no apareció o no respondió: se deja captura y diagnóstico en vez de un traceback.
+            self.fallar("El portal no respondió como se esperaba: "
+                        + str(e).splitlines()[0][:200], "99_timeout")
         return self.confirmar_y_facturar(sol)
