@@ -121,7 +121,8 @@ class FlujoHeb(FlujoWalmart):
 
         self.page.locator("button:has-text('Agregar ticket')").click()
         esperar(self.page, 1000)
-        fila = self.page.locator("table").get_by_text(sol.ticket, exact=True)
+        # El portal real no siempre usa <table> (puede ser mat-table con divs): se busca en toda la página.
+        fila = self.page.get_by_text(sol.ticket, exact=True)
         try:
             fila.first.wait_for(state="visible", timeout=8000)
         except PWTimeout:
